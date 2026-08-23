@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Gemini AI Usage Collector",
+  "version": "0.1.0",
+  "description": "Local-first Gemini usage metadata collector.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://gemini.google.com/*", "http://localhost:4000/*"],
+  "background": {"service_worker": "service-worker.js", "type": "module"},
+  "content_scripts": [
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["config.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
