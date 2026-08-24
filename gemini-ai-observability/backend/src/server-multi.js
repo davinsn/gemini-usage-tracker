@@ -898,9 +898,7 @@ app.get(
 app.get(
     '/api/usage/by-provider',
     (_req, res) => {
-
         try {
-
             const rows =
                 db.prepare(`
                     SELECT
@@ -924,7 +922,27 @@ app.get(
                             FILTER (
                                 WHERE latency_ms IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(prompt_tokens),
+                            0
+                        ) AS prompt_tokens,
+
+                        COALESCE(
+                            SUM(response_tokens),
+                            0
+                        ) AS response_tokens,
+
+                        COALESCE(
+                            SUM(total_tokens),
+                            0
+                        ) AS total_tokens,
+
+                        COALESCE(
+                            SUM(total_tokens),
+                            0
+                        ) AS estimated_tokens
 
                     FROM usage_events
 
@@ -938,7 +956,6 @@ app.get(
             res.json(rows);
 
         } catch (error) {
-
             console.error(
                 '[ai-obs] PROVIDER SUMMARY ERROR:',
                 error
