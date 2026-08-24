@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Perplexity AI Usage Collector",
+  "version": "0.1.0",
+  "description": "Local-first Perplexity usage metadata collector.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.perplexity.ai/*",
+    "https://perplexity.ai/*",
+    "http://localhost:4000/*"
+  ],
+  "background": {
+    "service_worker": "service-worker-perplexity.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.perplexity.ai/*",
+        "https://perplexity.ai/*"
+      ],
+      "js": [
+        "config-perplexity.js",
+        "content-perplexity.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
