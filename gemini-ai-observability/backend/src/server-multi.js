@@ -680,7 +680,7 @@ app.get(
 
                         COALESCE(SUM(u.response_tokens), 0) AS response_tokens,
 
-                ]       COALESCE(SUM(u.total_tokens), 0) AS total_tokens
+                        COALESCE(SUM(u.total_tokens), 0) AS total_tokens
 
                     FROM employees e
 
@@ -826,7 +826,7 @@ app.get(
                         ) AS avg_latency_ms,
                         COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
                         COALESCE(SUM(response_tokens), 0) AS response_tokens,
-                        COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                        COALESCE(SUM(total_tokens), 0) AS total_tokens
 
                     FROM usage_events
 
