@@ -423,38 +423,38 @@ console.log('[chatgpt-obs] ===============================');
         // CACHE PROMPT WHILE USER TYPES
         // ========================================================
 
-        document.addEventListener(
-            'input',
-            event => {
+        // document.addEventListener(
+        //     'input',
+        //     event => {
 
-                const input =
-                    findPromptInput();
+        //         const input =
+        //             findPromptInput();
 
-                if (!input) {
-                    return;
-                }
+        //         if (!input) {
+        //             return;
+        //         }
 
-                if (
-                    event.target === input ||
-                    input.contains?.(event.target)
-                ) {
+        //         if (
+        //             event.target === input ||
+        //             input.contains?.(event.target)
+        //         ) {
 
-                    const text =
-                        getInputText(input).trim();
+        //             const text =
+        //                 getInputText(input).trim();
 
-                    if (text) {
+        //             if (text) {
 
-                        lastKnownPrompt = text;
+        //                 lastKnownPrompt = text;
 
-                        console.log(
-                            '[chatgpt-obs] Cached prompt:',
-                            lastKnownPrompt
-                        );
-                    }
-                }
-            },
-            true
-        );
+        //                 console.log(
+        //                     '[chatgpt-obs] Cached prompt:',
+        //                     lastKnownPrompt
+        //                 );
+        //             }
+        //         }
+        //     },
+        //     true
+        // );
 
         // ========================================================
         // START INTERACTION
