@@ -1,0 +1,29 @@
+    {
+  "manifest_version": 3,
+  "name": "ChatGPT AI Usage Collector",
+  "version": "0.1.0",
+  "description": "Local-first ChatGPT usage metadata collector.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "http://localhost:4000/*"
+  ],
+  "background": {
+    "service_worker": "service-worker-chatgpt.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "config-chatgpt.js",
+        "content-chatgpt.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
