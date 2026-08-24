@@ -1,7 +1,9 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0"
@@ -22,177 +24,251 @@
          HEADER
     ====================================================== -->
 
-    <header>
+    <header class="dashboard-header">
+
         <div>
             <h1>AI Observability</h1>
-            <p>Multi-AI usage monitoring dashboard</p>
+
+            <p>
+                Multi-AI usage monitoring and analytics
+            </p>
         </div>
 
         <div class="status">
             <span class="status-dot"></span>
             API Connected
         </div>
+
     </header>
 
 
     <!-- =====================================================
-         OVERALL KPI CARDS
+         KPI OVERVIEW
     ====================================================== -->
 
-    <section class="metrics">
+    <section class="overview-section">
 
-        <div class="metric-card">
-            <span class="metric-label">
-                Total Interactions
-            </span>
+        <div class="section-title">
+            <div>
+                <h2>Overview</h2>
 
-            <strong id="interactions">
-                -
-            </strong>
+                <p>
+                    Overall AI activity across your organization
+                </p>
+            </div>
         </div>
 
 
-        <div class="metric-card">
-            <span class="metric-label">
-                Total Sessions
-            </span>
+        <div class="metrics">
 
-            <strong id="sessions">
-                -
-            </strong>
-        </div>
+            <!-- TOTAL INTERACTIONS -->
 
+            <div class="metric-card">
 
-        <div class="metric-card">
-            <span class="metric-label">
-                Active Employees
-            </span>
+                <span class="metric-label">
+                    AI Interactions
+                </span>
 
-            <strong id="employees">
-                -
-            </strong>
-        </div>
+                <strong id="interactions">
+                    -
+                </strong>
 
+                <span class="metric-description">
+                    Total AI interactions recorded
+                </span>
 
-        <div class="metric-card">
-            <span class="metric-label">
-                Average Latency
-            </span>
-
-            <strong id="latency">
-                -
-            </strong>
-        </div>
+            </div>
 
 
-        <div class="metric-card">
-            <span class="metric-label">
-                Total Tokens
-            </span>
+            <!-- TOTAL SESSIONS -->
 
-            <strong id="tokens">
-                -
-            </strong>
+            <div class="metric-card">
+
+                <span class="metric-label">
+                    AI Sessions
+                </span>
+
+                <strong id="sessions">
+                    -
+                </strong>
+
+                <span class="metric-description">
+                    Total AI sessions
+                </span>
+
+            </div>
+
+
+            <!-- ACTIVE EMPLOYEES -->
+
+            <div class="metric-card">
+
+                <span class="metric-label">
+                    Active Users
+                </span>
+
+                <strong id="employees">
+                    -
+                </strong>
+
+                <span class="metric-description">
+                    Employees using AI
+                </span>
+
+            </div>
+
+
+            <!-- LATENCY -->
+
+            <div class="metric-card">
+
+                <span class="metric-label">
+                    Average Latency
+                </span>
+
+                <strong id="latency">
+                    -
+                </strong>
+
+                <span class="metric-description">
+                    Average AI response time
+                </span>
+
+            </div>
+
+
+            <!-- TOKENS -->
+
+            <div class="metric-card">
+
+                <span class="metric-label">
+                    Total Tokens
+                </span>
+
+                <strong id="tokens">
+                    -
+                </strong>
+
+                <span class="metric-description">
+                    Total tokens processed
+                </span>
+
+            </div>
+
         </div>
 
     </section>
 
 
     <!-- =====================================================
-         AI PROVIDER CARDS
+         AI PLATFORMS
     ====================================================== -->
 
-    <section>
+    <section class="platform-section">
 
         <div class="section-title">
-            <h2>AI Platforms</h2>
+
+            <div>
+                <h2>AI Platforms</h2>
+
+                <p>
+                    See which AI platforms your employees are using
+                </p>
+            </div>
+
         </div>
+
 
         <div
             id="providerCards"
-            class="metrics"
+            class="metrics provider-metrics"
         >
+
+            <!-- Provider cards generated by dashboard.js -->
+
         </div>
 
     </section>
 
 
     <!-- =====================================================
-         CHARTS
+         USAGE OVERVIEW
     ====================================================== -->
 
-    <section class="charts">
+    <section class="dashboard-section">
 
-        <!-- AI PROVIDER USAGE -->
+        <div class="section-title">
 
-        <div class="chart-card">
+            <div>
+                <h2>Usage Overview</h2>
 
-            <div class="chart-header">
-                <h2>Interactions by AI</h2>
-            </div>
-
-            <div class="chart-container">
-                <canvas id="providerInteractionChart"></canvas>
-            </div>
-
-        </div>
-
-
-        <!-- SESSIONS BY AI -->
-
-        <div class="chart-card">
-
-            <div class="chart-header">
-                <h2>Sessions by AI</h2>
-            </div>
-
-            <div class="chart-container">
-                <canvas id="providerSessionChart"></canvas>
+                <p>
+                    Compare activity across AI platforms
+                </p>
             </div>
 
         </div>
 
 
-        <!-- EMPLOYEE USAGE -->
+        <div class="charts">
 
-        <div class="chart-card wide">
+            <!-- =================================================
+                 INTERACTIONS BY AI
+            ================================================== -->
 
-            <div class="chart-header">
-                <h2>Interactions by Employee</h2>
+            <div class="chart-card">
+
+                <div class="chart-header">
+
+                    <div>
+                        <h2>Interactions by AI</h2>
+
+                        <p>
+                            Number of interactions recorded for
+                            each AI platform
+                        </p>
+                    </div>
+
+                </div>
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="providerInteractionChart"
+                    ></canvas>
+
+                </div>
+
             </div>
 
-            <div class="chart-container">
-                <canvas id="employeeInteractionChart"></canvas>
-            </div>
 
-        </div>
+            <!-- =================================================
+                 SESSIONS BY AI
+            ================================================== -->
 
+            <div class="chart-card">
 
-        <!-- EMPLOYEE + AI -->
+                <div class="chart-header">
 
-        <div class="chart-card wide">
+                    <div>
+                        <h2>Sessions by AI</h2>
 
-            <div class="chart-header">
-                <h2>AI Usage by Employee</h2>
-            </div>
+                        <p>
+                            Number of sessions started on each
+                            AI platform
+                        </p>
+                    </div>
 
-            <div class="chart-container large">
-                <canvas id="employeeAiChart"></canvas>
-            </div>
+                </div>
 
-        </div>
+                <div class="chart-container">
 
+                    <canvas
+                        id="providerSessionChart"
+                    ></canvas>
 
-        <!-- LATENCY -->
+                </div>
 
-        <div class="chart-card wide">
-
-            <div class="chart-header">
-                <h2>Average Latency by AI</h2>
-            </div>
-
-            <div class="chart-container">
-                <canvas id="latencyChart"></canvas>
             </div>
 
         </div>
@@ -201,40 +277,88 @@
 
 
     <!-- =====================================================
-         EMPLOYEE TABLE
+         EMPLOYEE USAGE
     ====================================================== -->
 
-    <section class="table-card">
+    <section class="dashboard-section">
 
-        <div class="chart-header">
-            <h2>Employee AI Usage</h2>
+        <div class="section-title">
+
+            <div>
+                <h2>Employee Usage</h2>
+
+                <p>
+                    Understand how employees are using AI
+                </p>
+            </div>
+
         </div>
 
-        <div class="table-wrapper">
 
-            <table>
+        <div class="charts">
 
-                <thead>
-                    <tr>
-                        <th>Email</th>
-                        <th>Department</th>
+            <!-- =================================================
+                 INTERACTIONS BY EMPLOYEE
+            ================================================== -->
 
-                        <th>Gemini</th>
-                        <th>ChatGPT</th>
-                        <th>Claude</th>
-                        <th>Copilot</th>
-                        <th>Perplexity</th>
+            <div class="chart-card wide">
 
-                        <th>Total</th>
-                        <th>Sessions</th>
-                        <th>Avg Latency</th>
-                    </tr>
-                </thead>
+                <div class="chart-header">
 
-                <tbody id="employeeTable">
-                </tbody>
+                    <div>
 
-            </table>
+                        <h2>Interactions by Employee</h2>
+
+                        <p>
+                            Total AI interactions for each employee
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="employeeInteractionChart"
+                    ></canvas>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 AI USAGE BY EMPLOYEE
+            ================================================== -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>AI Usage by Employee</h2>
+
+                        <p>
+                            Compare AI platform usage across employees
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container large">
+
+                    <canvas
+                        id="employeeAiChart"
+                    ></canvas>
+
+                </div>
+
+            </div>
 
         </div>
 
@@ -242,7 +366,156 @@
 
 
     <!-- =====================================================
-         LAST UPDATED
+         PLATFORM PERFORMANCE
+    ====================================================== -->
+
+    <section class="dashboard-section">
+
+        <div class="section-title">
+
+            <div>
+                <h2>Platform Performance</h2>
+
+                <p>
+                    Compare response performance across AI platforms
+                </p>
+            </div>
+
+        </div>
+
+
+        <div class="charts">
+
+            <!-- =================================================
+                 LATENCY
+            ================================================== -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>Average Response Latency</h2>
+
+                        <p>
+                            Average time taken for each AI platform
+                            to respond
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="latencyChart"
+                    ></canvas>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         EMPLOYEE DETAIL TABLE
+    ====================================================== -->
+
+    <section class="table-section">
+
+        <div class="section-title">
+
+            <div>
+
+                <h2>Employee AI Usage</h2>
+
+                <p>
+                    Detailed breakdown of AI activity by employee
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="table-card">
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>
+                                Employee
+                            </th>
+
+                            <th>
+                                Department
+                            </th>
+
+                            <th>
+                                Gemini
+                            </th>
+
+                            <th>
+                                ChatGPT
+                            </th>
+
+                            <th>
+                                Claude
+                            </th>
+
+                            <th>
+                                Copilot
+                            </th>
+
+                            <th>
+                                Perplexity
+                            </th>
+
+                            <th>
+                                Total
+                            </th>
+
+                            <th>
+                                Sessions
+                            </th>
+
+                            <th>
+                                Avg Latency
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="employeeTable">
+
+                        <!-- Rows generated by dashboard.js -->
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         FOOTER
     ====================================================== -->
 
     <footer>
@@ -260,7 +533,12 @@
 </div>
 
 
+<!-- =====================================================
+     DASHBOARD JAVASCRIPT
+====================================================== -->
+
 <script src="dashboard.js"></script>
 
 </body>
 </html>
+```
