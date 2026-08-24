@@ -47,57 +47,67 @@ console.log('[gemini-obs] ===============================');
   // ============================================================
 
   const send = (event) => {
+
     const payload = {
-      type: 'GEMINI_USAGE_EVENT',
+        type: 'AI_USAGE_EVENT',
 
-      config: cfg,
+        config: cfg,
 
-      event: {
-        email: cfg.employeeEmail,
-        department: cfg.department,
-        role: cfg.role,
+        event: {
+            provider: 'gemini',
 
-        session_id: sessionId,
+            email: cfg.employeeEmail,
+            department: cfg.department,
+            role: cfg.role,
 
-        occurred_at:
-          new Date().toISOString(),
+            session_id: sessionId,
 
-        ...event
-      }
+            occurred_at:
+                new Date().toISOString(),
+
+            ...event
+        }
     };
 
     console.log(
-      '[gemini-obs] EVENT →',
-      event.event_type,
-      payload
+        '[ai-obs] EVENT →',
+        event.event_type,
+        payload
     );
 
     try {
-      chrome.runtime.sendMessage(
-        payload,
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.error(
-              '[gemini-obs] SEND ERROR:',
-              chrome.runtime.lastError.message
-            );
 
-            return;
-          }
+        chrome.runtime.sendMessage(
+            payload,
+            (response) => {
 
-          console.log(
-            '[gemini-obs] BACKGROUND RESPONSE:',
-            response
-          );
-        }
-      );
+                if (chrome.runtime.lastError) {
+
+                    console.error(
+                        '[ai-obs] SEND ERROR:',
+                        chrome.runtime.lastError.message
+                    );
+
+                    return;
+                }
+
+                console.log(
+                    '[ai-obs] BACKGROUND RESPONSE:',
+                    response
+                );
+
+            }
+        );
+
     } catch (error) {
-      console.error(
-        '[gemini-obs] SEND EXCEPTION:',
-        error
-      );
+
+        console.error(
+            '[ai-obs] SEND EXCEPTION:',
+            error
+        );
+
     }
-  };
+};
 
   // ============================================================
   // INPUT DETECTION
