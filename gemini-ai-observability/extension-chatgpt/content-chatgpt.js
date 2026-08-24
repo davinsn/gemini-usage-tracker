@@ -270,32 +270,26 @@ console.log('[chatgpt-obs] ===============================');
             }
 
             const payload = {
+                type: 'CHATGPT_USAGE_EVENT',
 
-                type:
-                    'CHATGPT_USAGE_EVENT',
+                provider: 'openai',
+                product: 'chatgpt',
 
-                employeeEmail:
-                    employeeEmail,
+                employeeEmail: employeeEmail,
 
                 event: {
+                    email: employeeEmail,
+                    employeeEmail: employeeEmail,
 
-                    email:
-                        employeeEmail,
+                    provider: 'openai',
+                    product: 'chatgpt',
 
-                    employeeEmail:
-                        employeeEmail,
+                    department: cfg.department ?? null,
+                    role: cfg.role ?? null,
 
-                    department:
-                        cfg.department ?? null,
+                    session_id: sessionId,
 
-                    role:
-                        cfg.role ?? null,
-
-                    session_id:
-                        sessionId,
-
-                    occurred_at:
-                        new Date().toISOString(),
+                    occurred_at: new Date().toISOString(),
 
                     ...event
                 }

@@ -299,21 +299,30 @@ console.log('[gemini-obs] ===============================');
     }
 
     const payload = {
-        type: 'GEMINI_USAGE_EVENT',
+    type: 'GEMINI_USAGE_EVENT',
 
+    provider: 'google',
+    product: 'gemini',
+
+    employeeEmail: employeeEmail,
+
+    event: {
+        email: employeeEmail,
         employeeEmail: employeeEmail,
 
-        event: {
-            email: employeeEmail,
-            employeeEmail: employeeEmail,
-            department: cfg.department ?? null,
-            role: cfg.role ?? null,
-            session_id: sessionId,
-            occurred_at: new Date().toISOString(),
-            ...event
-        }
-    };
+        provider: 'google',
+        product: 'gemini',
 
+        department: cfg.department ?? null,
+        role: cfg.role ?? null,
+
+        session_id: sessionId,
+
+        occurred_at: new Date().toISOString(),
+
+        ...event
+    }
+};
     console.log(
         '[gemini-obs] ================================='
     );
