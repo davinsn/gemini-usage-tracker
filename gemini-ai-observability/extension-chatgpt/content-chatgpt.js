@@ -151,66 +151,142 @@ console.log('[chatgpt-obs] ===============================');
     let collectorInitialized = false;
 
     // ============================================================
-    // WAIT FOR ACCOUNT
-    // ============================================================
+// WAIT FOR ACCOUNT
+// ============================================================
 
-    const detectAccountWithRetry = (
-        attempts = 30,
-        delay = 1000
-    ) => {
+let accountObserver = null;
+let accountDetectionStarted = false;
 
-        const detectedEmail =
-            detectChatGPTAccountEmail();
+const handleDetectedAccount = (detectedEmail) => {
 
-        if (detectedEmail) {
+    if (!detectedEmail) {
+        return;
+    }
 
-            employeeEmail =
-                detectedEmail.toLowerCase();
+    const normalizedEmail =
+        detectedEmail.toLowerCase().trim();
 
-            console.log(
-                '[chatgpt-obs] ================================='
-            );
+    // Already detected
+    if (employeeEmail === normalizedEmail) {
+        return;
+    }
 
-            console.log(
-                '[chatgpt-obs] REAL CHATGPT ACCOUNT DETECTED'
-            );
+    employeeEmail = normalizedEmail;
 
-            console.log(
-                '[chatgpt-obs] Employee:',
-                employeeEmail
-            );
+    console.log(
+        '[chatgpt-obs] ================================='
+    );
 
-            console.log(
-                '[chatgpt-obs] ================================='
-            );
+    console.log(
+        '[chatgpt-obs] REAL CHATGPT ACCOUNT DETECTED'
+    );
 
-            initializeCollector();
+    console.log(
+        '[chatgpt-obs] Employee:',
+        employeeEmail
+    );
 
+    console.log(
+        '[chatgpt-obs] ================================='
+    );
+
+    // Stop watching once we know the account
+    if (accountObserver) {
+        accountObserver.disconnect();
+        accountObserver = null;
+    }
+
+    initializeCollector();
+};
+
+const detectAccountImmediately = () => {
+
+    console.log(
+        '[chatgpt-obs] Checking ChatGPT account immediately...'
+    );
+
+    const detectedEmail =
+        detectChatGPTAccountEmail();
+
+    if (detectedEmail) {
+        handleDetectedAccount(detectedEmail);
+        return true;
+    }
+
+    return false;
+};
+
+const waitForChatGPTAccount = () => {
+
+    if (accountDetectionStarted) {
+        return;
+    }
+
+    accountDetectionStarted = true;
+
+    console.log(
+        '[chatgpt-obs] Starting immediate account detection...'
+    );
+
+    // ========================================================
+    // FIRST CHECK — DO NOT WAIT
+    // ========================================================
+
+    if (detectAccountImmediately()) {
+        return;
+    }
+
+    console.log(
+        '[chatgpt-obs] Account not present yet.'
+    );
+
+    console.log(
+        '[chatgpt-obs] Watching DOM for account information...'
+    );
+
+    // ========================================================
+    // WATCH DOM
+    // ========================================================
+
+    accountObserver =
+        new MutationObserver(() => {
+
+            // Don't keep searching after account is found
+            if (employeeEmail) {
+                return;
+            }
+
+            const detectedEmail =
+                detectChatGPTAccountEmail();
+
+            if (detectedEmail) {
+                handleDetectedAccount(detectedEmail);
+            }
+        });
+
+    const startObserver = () => {
+
+        if (!document.documentElement) {
+            requestAnimationFrame(startObserver);
             return;
         }
 
-        if (attempts <= 0) {
-
-            console.error(
-                '[chatgpt-obs] COULD NOT DETECT CHATGPT ACCOUNT'
-            );
-
-            return;
-        }
-
-        console.log(
-            `[chatgpt-obs] Waiting for ChatGPT account... (${attempts} attempts remaining)`
+        accountObserver.observe(
+            document.documentElement,
+            {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true
+            }
         );
 
-        setTimeout(() => {
-
-            detectAccountWithRetry(
-                attempts - 1,
-                delay
-            );
-
-        }, delay);
+        // Check once more after observer is attached
+        detectAccountImmediately();
     };
+
+    startObserver();
+};
 
     // ============================================================
     // INITIALIZE COLLECTOR
@@ -888,6 +964,6 @@ console.log('[chatgpt-obs] ===============================');
     // START
     // ============================================================
 
-    detectAccountWithRetry();
+    waitForChatGPTAccount();
 
 })();
