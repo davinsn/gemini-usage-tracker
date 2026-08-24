@@ -19,7 +19,6 @@ chrome.runtime.onMessage.addListener(
 
         console.log('[gemini-obs] ===============================');
         console.log('[gemini-obs] MESSAGE RECEIVED');
-        console.log('[gemini-obs] Raw message:', message);
         console.log('[gemini-obs] Message type:', message?.type);
         console.log('[gemini-obs] Sender tab:', sender?.tab?.id);
         console.log('[gemini-obs] ===============================');
@@ -60,11 +59,6 @@ chrome.runtime.onMessage.addListener(
         // --------------------------------------------------------
 
         const event = message.event;
-
-        console.log(
-            '[gemini-obs] EVENT OBJECT:',
-            event
-        );
 
         if (!event) {
             console.error(
@@ -139,49 +133,140 @@ chrome.runtime.onMessage.addListener(
             event.occurred_at ||
             new Date().toISOString();
 
-
         const provider = 'google';
         const product = 'gemini';
 
-        console.log('[gemini-obs] PROVIDER:', provider);
-        console.log('[gemini-obs] PRODUCT:', product);
+        // --------------------------------------------------------
+        // TOKEN DATA
+        // --------------------------------------------------------
+        // These values are calculated by the content script.
+        //
+        // prompt_tokens
+        // completion_tokens
+        // estimated_tokens
+        // total_tokens
+        //
+        // We simply forward them to the backend.
+        // --------------------------------------------------------
+
+        const promptTokens =
+            event.prompt_tokens ?? null;
+
+        const completionTokens =
+            event.completion_tokens ?? null;
+
+        const estimatedTokens =
+            event.estimated_tokens ?? null;
+
+        const totalTokens =
+            event.total_tokens ??
+            estimatedTokens ??
+            null;
+
+        console.log(
+            '[gemini-obs] TOKEN DATA:',
+            {
+                promptTokens,
+                completionTokens,
+                estimatedTokens,
+                totalTokens
+            }
+        );
 
         // --------------------------------------------------------
         // Build backend payload
         // --------------------------------------------------------
 
         const payload = {
-            email: email,
+    // ====================================================
+    // IDENTITY
+    // ====================================================
 
-            provider: provider,
-            product: product,
+        email: email,
 
-            department: event.department ?? null,
-            role: event.role ?? null,
+        provider: provider,
+        product: product,
 
-            event_type: eventType,
-            session_id: event.session_id ?? null,
-            interaction_id: event.interaction_id ?? null,
-            model: event.model ?? null,
-            occurred_at: occurredAt,
-            latency_ms: event.latency_ms ?? null,
-            prompt_length: event.prompt_length ?? null,
-            response_length: event.response_length ?? null,
+        department:
+            event.department ?? null,
+
+        role:
+            event.role ?? null,
+
+        // ====================================================
+        // EVENT
+        // ====================================================
+
+        event_type:
+            eventType,
+
+        session_id:
+            event.session_id ?? null,
+
+        interaction_id:
+            event.interaction_id ?? null,
+
+        model:
+            event.model ?? null,
+
+        occurred_at:
+            occurredAt,
+
+        latency_ms:
+            event.latency_ms ?? null,
+
+        prompt_length:
+            event.prompt_length ?? null,
+
+        response_length:
+            event.response_length ?? null,
+
+        // ====================================================
+        // TOKEN ESTIMATES
+        // ====================================================
+
+        prompt_tokens:
+            event.prompt_tokens ?? null,
+
+        response_tokens:
+            event.response_tokens ?? null,
+
+        total_tokens:
+            event.total_tokens ?? null,
+
+            // ----------------------------------------------------
+            // Metadata
+            // ----------------------------------------------------
 
             metadata: {
                 ...(event.metadata || {}),
-                extension: 'gemini-observability',
+
+                extension:
+                    'gemini-observability',
+
                 extension_version:
                     chrome.runtime.getManifest().version,
-                source: 'chrome-extension',
 
-                provider: provider,
-                product: product,
+                source:
+                    'chrome-extension',
 
-                tab_id: sender?.tab?.id ?? null,
-                tab_url: sender?.tab?.url ?? null
+                provider:
+                    provider,
+
+                product:
+                    product,
+
+                tab_id:
+                    sender?.tab?.id ?? null,
+
+                tab_url:
+                    sender?.tab?.url ?? null
             }
         };
+
+        // --------------------------------------------------------
+        // Debug payload
+        // --------------------------------------------------------
 
         console.log('[gemini-obs] ===============================');
         console.log('[gemini-obs] SENDING TO BACKEND');
@@ -189,7 +274,22 @@ chrome.runtime.onMessage.addListener(
             '[gemini-obs] URL:',
             `${API_BASE_URL}/api/usage/events`
         );
-        console.log('[gemini-obs] Payload:', payload);
+
+        console.log(
+            '[gemini-obs] TOKEN SUMMARY:',
+            {
+                prompt_tokens: payload.prompt_tokens,
+                completion_tokens: payload.completion_tokens,
+                estimated_tokens: payload.estimated_tokens,
+                total_tokens: payload.total_tokens
+            }
+        );
+
+        console.log(
+            '[gemini-obs] Payload:',
+            payload
+        );
+
         console.log('[gemini-obs] ===============================');
 
         // --------------------------------------------------------
@@ -202,132 +302,170 @@ chrome.runtime.onMessage.addListener(
                 method: 'POST',
 
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type':
+                        'application/json'
                 },
 
-                body: JSON.stringify(payload)
+                body:
+                    JSON.stringify(payload)
             }
         )
-            .then(async response => {
 
-                console.log(
-                    '[gemini-obs] BACKEND HTTP STATUS:',
+        // --------------------------------------------------------
+        // Backend response
+        // --------------------------------------------------------
+
+        .then(async response => {
+
+            console.log(
+                '[gemini-obs] BACKEND HTTP STATUS:',
+                response.status
+            );
+
+            let data = null;
+
+            const contentType =
+                response.headers.get(
+                    'content-type'
+                ) || '';
+
+            if (
+                contentType.includes(
+                    'application/json'
+                )
+            ) {
+
+                try {
+                    data =
+                        await response.json();
+
+                } catch (error) {
+
+                    console.error(
+                        '[gemini-obs] JSON PARSE ERROR:',
+                        error
+                    );
+                }
+
+            } else {
+
+                try {
+                    data =
+                        await response.text();
+
+                } catch {
+                    data = null;
+                }
+            }
+
+            console.log(
+                '[gemini-obs] BACKEND RESPONSE:',
+                data
+            );
+
+            // ----------------------------------------------------
+            // Backend rejected request
+            // ----------------------------------------------------
+
+            if (!response.ok) {
+
+                console.error(
+                    '[gemini-obs] BACKEND REJECTED EVENT'
+                );
+
+                console.error(
+                    '[gemini-obs] Status:',
                     response.status
                 );
 
-                let data = null;
-
-                const contentType =
-                    response.headers.get('content-type') || '';
-
-                if (
-                    contentType.includes(
-                        'application/json'
-                    )
-                ) {
-                    try {
-                        data = await response.json();
-                    } catch (error) {
-                        console.error(
-                            '[gemini-obs] JSON PARSE ERROR:',
-                            error
-                        );
-                    }
-                } else {
-                    try {
-                        data = await response.text();
-                    } catch {
-                        data = null;
-                    }
-                }
-
-                console.log(
-                    '[gemini-obs] BACKEND RESPONSE:',
-                    data
-                );
-
-                // ------------------------------------------------
-                // Backend rejected request
-                // ------------------------------------------------
-
-                if (!response.ok) {
-
-                    console.error(
-                        '[gemini-obs] BACKEND REJECTED EVENT'
-                    );
-
-                    console.error(
-                        '[gemini-obs] Status:',
-                        response.status
-                    );
-
-                    console.error(
-                        '[gemini-obs] Response:',
-                        data
-                    );
-
-                    sendResponse({
-                        accepted: false,
-                        error: 'api_error',
-                        status: response.status,
-                        data: data
-                    });
-
-                    return;
-                }
-
-                // ------------------------------------------------
-                // Success
-                // ------------------------------------------------
-
-                console.log(
-                    '[gemini-obs] ==============================='
-                );
-
-                console.log(
-                    '[gemini-obs] EVENT SUCCESSFULLY SENT'
-                );
-
-                console.log(
-                    '[gemini-obs] Employee:',
-                    email
-                );
-
-                console.log(
-                    '[gemini-obs] Event:',
-                    eventType
-                );
-
-                console.log(
-                    '[gemini-obs] Interaction:',
-                    event.interaction_id
-                );
-
-                console.log(
-                    '[gemini-obs] ==============================='
-                );
-
-                sendResponse({
-                    accepted: true,
-                    api: data
-                });
-            })
-
-            .catch(error => {
-
                 console.error(
-                    '[gemini-obs] BACKEND FETCH ERROR:',
-                    error
+                    '[gemini-obs] Response:',
+                    data
                 );
 
                 sendResponse({
                     accepted: false,
-                    error: 'backend_unreachable',
-                    message: error.message
+                    error: 'api_error',
+                    status: response.status,
+                    data: data
                 });
-            });
 
-        // Keep the message channel alive while fetch runs.
+                return;
+            }
+
+            // ----------------------------------------------------
+            // Success
+            // ----------------------------------------------------
+
+            console.log(
+                '[gemini-obs] ==============================='
+            );
+
+            console.log(
+                '[gemini-obs] EVENT SUCCESSFULLY SENT'
+            );
+
+            console.log(
+                '[gemini-obs] Employee:',
+                email
+            );
+
+            console.log(
+                '[gemini-obs] Event:',
+                eventType
+            );
+
+            console.log(
+                '[gemini-obs] Interaction:',
+                event.interaction_id
+            );
+
+            console.log(
+                '[gemini-obs] Prompt tokens:',
+                promptTokens
+            );
+
+            console.log(
+                '[gemini-obs] Completion tokens:',
+                completionTokens
+            );
+
+            console.log(
+                '[gemini-obs] Estimated total tokens:',
+                estimatedTokens
+            );
+
+            console.log(
+                '[gemini-obs] ==============================='
+            );
+
+            sendResponse({
+                accepted: true,
+                api: data
+            });
+        })
+
+        // --------------------------------------------------------
+        // Fetch error
+        // --------------------------------------------------------
+
+        .catch(error => {
+
+            console.error(
+                '[gemini-obs] BACKEND FETCH ERROR:',
+                error
+            );
+
+            sendResponse({
+                accepted: false,
+                error: 'backend_unreachable',
+                message: error.message
+            });
+        });
+
+        // Keep message channel alive
+        // while fetch is running.
+
         return true;
     }
 );
