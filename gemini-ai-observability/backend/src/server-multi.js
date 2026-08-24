@@ -164,6 +164,9 @@ const insertEvent = db.prepare(`
         latency_ms,
         prompt_length,
         response_length,
+        prompt_tokens,
+        response_tokens,
+        total_tokens,
         metadata
     )
     VALUES
@@ -179,6 +182,9 @@ const insertEvent = db.prepare(`
         @latency_ms,
         @prompt_length,
         @response_length,
+        @prompt_tokens,
+        @response_tokens,
+        @total_tokens,
         @metadata
     )
 `);
@@ -193,6 +199,11 @@ const completeEvent = db.prepare(`
         latency_ms = @latency_ms,
         prompt_length = @prompt_length,
         response_length = @response_length,
+
+        prompt_tokens = @prompt_tokens,
+        response_tokens = @response_tokens,
+        total_tokens = @total_tokens,
+
         model = @model,
         metadata = @metadata
     WHERE employee_id = @employee_id
@@ -234,6 +245,9 @@ app.post(
             latency_ms,
             prompt_length,
             response_length,
+            prompt_tokens,
+            response_tokens,
+            total_tokens,
             metadata
         } = body;
 
@@ -344,36 +358,24 @@ app.post(
                     'interaction_completed'
                 ) {
 
-                    const result =
-                        completeEvent.run({
+                    const result = completeEvent.run({
+                        employee_id: employeeId,
+                        provider: eventProvider,
+                        product: eventProduct,
+                        interaction_id: interactionId,
 
-                            employee_id:
-                                employeeId,
+                        latency_ms: latency_ms ?? null,
 
-                            provider:
-                                eventProvider,
+                        prompt_length: prompt_length ?? null,
+                        response_length: response_length ?? null,
 
-                            product:
-                                eventProduct,
+                        prompt_tokens: prompt_tokens ?? null,
+                        response_tokens: response_tokens ?? null,
+                        total_tokens: total_tokens ?? null,
 
-                            interaction_id:
-                                interactionId,
-
-                            latency_ms:
-                                latency_ms ?? null,
-
-                            prompt_length:
-                                prompt_length ?? null,
-
-                            response_length:
-                                response_length ?? null,
-
-                            model:
-                                model ?? null,
-
-                            metadata:
-                                metadataJson
-                        });
+                        model: model ?? null,
+                        metadata: metadataJson
+                    });
 
                     return {
                         inserted:
@@ -389,42 +391,51 @@ app.post(
                 // =================================================
 
                 const result =
-                    insertEvent.run({
+                insertEvent.run({
+                    employee_id:
+                        employeeId,
 
-                        employee_id:
-                            employeeId,
+                    provider:
+                        eventProvider,
 
-                        provider:
-                            eventProvider,
+                    product:
+                        eventProduct,
 
-                        product:
-                            eventProduct,
+                    event_type,
 
-                        event_type,
+                    session_id:
+                        session_id ?? null,
 
-                        session_id:
-                            session_id ?? null,
+                    interaction_id:
+                        interactionId,
 
-                        interaction_id:
-                            interactionId,
+                    model:
+                        model ?? null,
 
-                        model:
-                            model ?? null,
+                    occurred_at,
 
-                        occurred_at,
+                    latency_ms:
+                        latency_ms ?? null,
 
-                        latency_ms:
-                            latency_ms ?? null,
+                    prompt_length:
+                        prompt_length ?? null,
 
-                        prompt_length:
-                            prompt_length ?? null,
+                    response_length:
+                        response_length ?? null,
 
-                        response_length:
-                            response_length ?? null,
+                    // TOKEN ESTIMATES
+                    prompt_tokens:
+                        prompt_tokens ?? null,
 
-                        metadata:
-                            metadataJson
-                    });
+                    response_tokens:
+                        response_tokens ?? null,
+
+                    total_tokens:
+                        total_tokens ?? null,
+
+                    metadata:
+                        metadataJson
+                });
 
                 return {
                     inserted:
@@ -484,26 +495,20 @@ app.post(
 app.get(
     '/api/usage/summary',
     (req, res) => {
-
         try {
-
             const provider =
-                req.query.provider ||
-                null;
+                req.query.provider || null;
 
             const product =
-                req.query.product ||
-                null;
+                req.query.product || null;
 
             let row;
 
             if (provider && product) {
-
                 row = db.prepare(`
                     SELECT
                         COUNT(*) FILTER (
-                            WHERE event_type =
-                                'interaction_started'
+                            WHERE event_type = 'interaction_started'
                         ) AS interactions,
 
                         COUNT(
@@ -519,7 +524,22 @@ app.get(
                             FILTER (
                                 WHERE latency_ms IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(prompt_tokens),
+                            0
+                        ) AS prompt_tokens,
+
+                        COALESCE(
+                            SUM(response_tokens),
+                            0
+                        ) AS response_tokens,
+
+                        COALESCE(
+                            SUM(total_tokens),
+                            0
+                        ) AS total_tokens
 
                     FROM usage_events
 
@@ -535,8 +555,7 @@ app.get(
                 row = db.prepare(`
                     SELECT
                         COUNT(*) FILTER (
-                            WHERE event_type =
-                                'interaction_started'
+                            WHERE event_type = 'interaction_started'
                         ) AS interactions,
 
                         COUNT(
@@ -552,7 +571,22 @@ app.get(
                             FILTER (
                                 WHERE latency_ms IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(prompt_tokens),
+                            0
+                        ) AS prompt_tokens,
+
+                        COALESCE(
+                            SUM(response_tokens),
+                            0
+                        ) AS response_tokens,
+
+                        COALESCE(
+                            SUM(total_tokens),
+                            0
+                        ) AS total_tokens
 
                     FROM usage_events
                 `).get();
@@ -568,8 +602,7 @@ app.get(
             );
 
             res.status(500).json({
-                error:
-                    'summary_failed'
+                error: 'summary_failed'
             });
         }
     }
@@ -642,7 +675,12 @@ app.get(
                             FILTER (
                                 WHERE u.latency_ms IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+                        COALESCE(SUM(u.prompt_tokens), 0) AS prompt_tokens,
+
+                        COALESCE(SUM(u.response_tokens), 0) AS response_tokens,
+
+                ]       COALESCE(SUM(u.total_tokens), 0) AS total_tokens
 
                     FROM employees e
 
@@ -785,7 +823,10 @@ app.get(
                             FILTER (
                                 WHERE latency_ms IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+                        COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                        COALESCE(SUM(response_tokens), 0) AS response_tokens,
+                        COALESCE(SUM(total_tokens), 0) AS total_tokens,
 
                     FROM usage_events
 
@@ -1079,8 +1120,14 @@ app.get(
                         u.model,
                         u.occurred_at,
                         u.latency_ms,
+
                         u.prompt_length,
                         u.response_length,
+
+                        u.prompt_tokens,
+                        u.response_tokens,
+                        u.total_tokens,
+
                         u.metadata
 
                     FROM usage_events u
