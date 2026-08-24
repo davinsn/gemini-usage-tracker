@@ -5,7 +5,7 @@ console.log('[gemini-obs] ===============================');
 
 (() => {
     console.log('[gemini-obs] IIFE STARTED');
-    console.log('[gemini-obs] VERSION = DOM-V6-ACCOUNT-FIX');
+    console.log('[gemini-obs] VERSION = DOM-V7-STABLE');
 
     // ============================================================
     // CONFIG
@@ -58,6 +58,7 @@ console.log('[gemini-obs] ===============================');
     // ============================================================
 
     const detectGeminiAccountEmail = () => {
+
         console.log(
             '[gemini-obs] Searching for Google Account element...'
         );
@@ -72,6 +73,7 @@ console.log('[gemini-obs] ===============================');
             );
 
         for (const element of accountElements) {
+
             const ariaLabel =
                 element.getAttribute('aria-label');
 
@@ -80,9 +82,11 @@ console.log('[gemini-obs] ===============================');
                 ariaLabel
             );
 
-            const email = extractEmail(ariaLabel);
+            const email =
+                extractEmail(ariaLabel);
 
             if (email) {
+
                 console.log(
                     '[gemini-obs] REAL GOOGLE ACCOUNT:',
                     email
@@ -93,7 +97,7 @@ console.log('[gemini-obs] ===============================');
         }
 
         // --------------------------------------------------------
-        // FALLBACK: GOOGLE ACCOUNT ATTRIBUTES
+        // FALLBACK ATTRIBUTES
         // --------------------------------------------------------
 
         const accountCandidates =
@@ -104,6 +108,7 @@ console.log('[gemini-obs] ===============================');
             );
 
         for (const element of accountCandidates) {
+
             const values = [
                 element.getAttribute('aria-label'),
                 element.getAttribute('data-tooltip'),
@@ -111,9 +116,12 @@ console.log('[gemini-obs] ===============================');
             ];
 
             for (const value of values) {
-                const email = extractEmail(value);
+
+                const email =
+                    extractEmail(value);
 
                 if (email) {
+
                     console.log(
                         '[gemini-obs] Account detected:',
                         email
@@ -125,7 +133,7 @@ console.log('[gemini-obs] ===============================');
         }
 
         // --------------------------------------------------------
-        // ACCOUNT MENU
+        // ACCOUNT MENU / DIALOG
         // --------------------------------------------------------
 
         const menuElements = [
@@ -138,12 +146,15 @@ console.log('[gemini-obs] ===============================');
         ];
 
         for (const element of menuElements) {
+
             const text =
                 element.textContent?.trim() || '';
 
-            const email = extractEmail(text);
+            const email =
+                extractEmail(text);
 
             if (email) {
+
                 console.log(
                     '[gemini-obs] Account detected from menu:',
                     email
@@ -165,8 +176,6 @@ console.log('[gemini-obs] ===============================');
     // ============================================================
 
     let employeeEmail = null;
-
-    // Prevent the collector from being initialized twice.
     let collectorInitialized = false;
 
     // ============================================================
@@ -177,10 +186,12 @@ console.log('[gemini-obs] ===============================');
         attempts = 30,
         delay = 1000
     ) => {
+
         const detectedEmail =
             detectGeminiAccountEmail();
 
         if (detectedEmail) {
+
             employeeEmail =
                 detectedEmail.toLowerCase();
 
@@ -207,6 +218,7 @@ console.log('[gemini-obs] ===============================');
         }
 
         if (attempts <= 0) {
+
             console.error(
                 '[gemini-obs] COULD NOT DETECT GEMINI ACCOUNT'
             );
@@ -219,10 +231,12 @@ console.log('[gemini-obs] ===============================');
         );
 
         setTimeout(() => {
+
             detectAccountWithRetry(
                 attempts - 1,
                 delay
             );
+
         }, delay);
     };
 
@@ -233,6 +247,7 @@ console.log('[gemini-obs] ===============================');
     const initializeCollector = () => {
 
         if (collectorInitialized) {
+
             console.warn(
                 '[gemini-obs] Collector already initialized'
             );
@@ -250,8 +265,15 @@ console.log('[gemini-obs] ===============================');
             crypto.randomUUID();
 
         let activeInteraction = null;
+
         let lastPromptSignature = null;
+
+        let lastKnownPrompt = '';
+
         let completionTimer = null;
+
+        // Prevent Enter + Send button from firing twice
+        let lastInteractionStartedAt = 0;
 
         console.log(
             '[gemini-obs] Tracking employee:',
@@ -267,110 +289,90 @@ console.log('[gemini-obs] ===============================');
         // SEND EVENT
         // ========================================================
 
-        const send = (event) => {
+ const send = (event) => {
 
-            if (!employeeEmail) {
-                console.error(
-                    '[gemini-obs] EVENT BLOCKED: No employee email'
-                );
+    if (!employeeEmail) {
+        console.error(
+            '[gemini-obs] EVENT BLOCKED: No employee email'
+        );
+        return;
+    }
 
-                return;
-            }
+    const payload = {
+        type: 'GEMINI_USAGE_EVENT',
 
-            // IMPORTANT:
-            // employeeEmail is explicitly included in BOTH
-            // the outer message and the event.
-            //
-            // This prevents the background script from having
-            // to guess which account generated the event.
+        employeeEmail: employeeEmail,
 
-            const payload = {
+        event: {
+            email: employeeEmail,
+            employeeEmail: employeeEmail,
+            department: cfg.department ?? null,
+            role: cfg.role ?? null,
+            session_id: sessionId,
+            occurred_at: new Date().toISOString(),
+            ...event
+        }
+    };
 
-                type: 'GEMINI_USAGE_EVENT',
+    console.log(
+        '[gemini-obs] ================================='
+    );
 
-                employeeEmail: employeeEmail,
+    console.log(
+        '[gemini-obs] SENDING EVENT'
+    );
 
-                event: {
+    console.log(
+        '[gemini-obs] employeeEmail:',
+        employeeEmail
+    );
 
-                    email: employeeEmail,
+    console.log(
+        '[gemini-obs] event_type:',
+        event.event_type
+    );
 
-                    employeeEmail: employeeEmail,
+    console.log(
+        '[gemini-obs] payload:',
+        payload
+    );
 
-                    department:
-                        cfg.department ?? null,
+    console.log(
+        '[gemini-obs] ================================='
+    );
 
-                    role:
-                        cfg.role ?? null,
+    chrome.runtime.sendMessage(
+        payload
+    )
+    .then(response => {
 
-                    session_id:
-                        sessionId,
+        console.log(
+            '[gemini-obs] BACKGROUND RESPONSE:',
+            response
+        );
 
-                    occurred_at:
-                        new Date().toISOString(),
+        if (!response?.accepted) {
 
-                    ...event
-                }
-            };
-
-            console.log(
-                '[gemini-obs] ================================='
+            console.error(
+                '[gemini-obs] EVENT REJECTED:',
+                response
             );
 
-            console.log(
-                '[gemini-obs] SENDING EVENT'
-            );
+            return;
+        }
 
-            console.log(
-                '[gemini-obs] employeeEmail:',
-                employeeEmail
-            );
+        console.log(
+            '[gemini-obs] EVENT ACCEPTED BY SERVICE WORKER'
+        );
+    })
+    .catch(error => {
 
-            console.log(
-                '[gemini-obs] event_type:',
-                event.event_type
-            );
-
-            console.log(
-                '[gemini-obs] payload:',
-                payload
-            );
-
-            console.log(
-                '[gemini-obs] ================================='
-            );
-
-            try {
-
-                chrome.runtime.sendMessage(
-                    payload,
-                    (response) => {
-
-                        if (chrome.runtime.lastError) {
-
-                            console.error(
-                                '[gemini-obs] SEND ERROR:',
-                                chrome.runtime.lastError.message
-                            );
-
-                            return;
-                        }
-
-                        console.log(
-                            '[gemini-obs] BACKGROUND RESPONSE:',
-                            response
-                        );
-                    }
-                );
-
-            } catch (error) {
-
-                console.error(
-                    '[gemini-obs] SEND EXCEPTION:',
-                    error
-                );
-            }
-        };
-
+        console.error(
+            '[gemini-obs] SERVICE WORKER ERROR:',
+            error
+        );
+    });
+};
         // ========================================================
         // FIND PROMPT INPUT
         // ========================================================
@@ -440,6 +442,7 @@ console.log('[gemini-obs] ===============================');
                 input instanceof HTMLTextAreaElement ||
                 input instanceof HTMLInputElement
             ) {
+
                 return input.value || '';
             }
 
@@ -451,40 +454,123 @@ console.log('[gemini-obs] ===============================');
         };
 
         // ========================================================
+        // CACHE PROMPT WHILE USER TYPES
+        // ========================================================
+
+        document.addEventListener(
+            'input',
+            event => {
+
+                const input =
+                    findPromptInput();
+
+                if (!input) {
+                    return;
+                }
+
+                if (
+                    event.target === input ||
+                    input.contains?.(event.target)
+                ) {
+
+                    const text =
+                        getInputText(input).trim();
+
+                    if (text) {
+
+                        lastKnownPrompt = text;
+
+                        console.log(
+                            '[gemini-obs] Cached prompt:',
+                            lastKnownPrompt
+                        );
+                    }
+                }
+            },
+            true
+        );
+
+        // ========================================================
         // START INTERACTION
         // ========================================================
 
         const startInteraction = () => {
 
+            const now = Date.now();
+
+            // Prevent Enter + Send click from creating two events
+            if (
+                now - lastInteractionStartedAt < 500
+            ) {
+
+                console.log(
+                    '[gemini-obs] Duplicate submit ignored'
+                );
+
+                return;
+            }
+
+            lastInteractionStartedAt = now;
+
             const input =
                 findPromptInput();
 
-            if (!input) {
-                console.warn(
-                    '[gemini-obs] No prompt input found'
-                );
+            let prompt = '';
 
-                return;
+            // Try live input
+            if (input) {
+
+                prompt =
+                    getInputText(input).trim();
             }
 
-            const prompt =
-                getInputText(input).trim();
+            // Fallback to cached prompt
+            if (!prompt) {
+
+                prompt =
+                    lastKnownPrompt;
+            }
 
             if (!prompt) {
+
                 console.warn(
-                    '[gemini-obs] Empty prompt'
+                    '[gemini-obs] Could not capture prompt'
                 );
 
                 return;
             }
+
+            console.log(
+                '[gemini-obs] ================================='
+            );
+
+            console.log(
+                '[gemini-obs] PROMPT CAPTURED'
+            );
+
+            console.log(
+                '[gemini-obs] Prompt:',
+                prompt
+            );
+
+            console.log(
+                '[gemini-obs] Prompt length:',
+                prompt.length
+            );
+
+            console.log(
+                '[gemini-obs] ================================='
+            );
 
             const signature =
                 `${prompt.length}:${prompt}`;
 
+            // Same interaction already active
             if (
                 activeInteraction &&
                 activeInteraction.signature === signature
             ) {
+
                 console.log(
                     '[gemini-obs] Duplicate interaction ignored'
                 );
@@ -492,10 +578,12 @@ console.log('[gemini-obs] ===============================');
                 return;
             }
 
+            // Same prompt already completed
             if (
                 signature === lastPromptSignature &&
                 !activeInteraction
             ) {
+
                 console.log(
                     '[gemini-obs] Same prompt already processed'
                 );
@@ -513,9 +601,15 @@ console.log('[gemini-obs] ===============================');
                 Date.now();
 
             activeInteraction = {
+
                 interactionId,
+
                 startedAt,
+
                 signature,
+
+                prompt,
+
                 promptLength:
                     prompt.length
             };
@@ -534,12 +628,15 @@ console.log('[gemini-obs] ===============================');
                 metadata: {
 
                     collector:
-                        'dom-v6',
+                        'dom-v7',
 
                     prompt_capture:
                         'pre-submit'
                 }
             });
+
+            // Clear cached prompt
+            lastKnownPrompt = '';
         };
 
         // ========================================================
@@ -549,6 +646,7 @@ console.log('[gemini-obs] ===============================');
         const getGeminiResponseText = () => {
 
             const candidates = [
+
                 ...document.querySelectorAll(
                     '[data-message-author-role="model"]'
                 ),
@@ -626,6 +724,25 @@ console.log('[gemini-obs] ===============================');
             const responseLength =
                 responseText.length;
 
+            console.log(
+                '[gemini-obs] COMPLETING INTERACTION'
+            );
+
+            console.log(
+                '[gemini-obs] Interaction ID:',
+                interaction.interactionId
+            );
+
+            console.log(
+                '[gemini-obs] Response length:',
+                responseLength
+            );
+
+            console.log(
+                '[gemini-obs] Latency:',
+                latency
+            );
+
             send({
 
                 event_type:
@@ -646,7 +763,7 @@ console.log('[gemini-obs] ===============================');
                 metadata: {
 
                     collector:
-                        'dom-v6',
+                        'dom-v7',
 
                     completion_detection:
                         'mutation-idle'
@@ -715,8 +832,15 @@ console.log('[gemini-obs] ===============================');
                 }
 
                 const combined = [
-                    button.getAttribute('aria-label'),
-                    button.getAttribute('title'),
+
+                    button.getAttribute(
+                        'aria-label'
+                    ),
+
+                    button.getAttribute(
+                        'title'
+                    ),
+
                     button.innerText
                 ]
                     .filter(Boolean)
@@ -782,7 +906,7 @@ console.log('[gemini-obs] ===============================');
             metadata: {
 
                 collector:
-                    'dom-v6',
+                    'dom-v7',
 
                 url_host:
                     location.host
