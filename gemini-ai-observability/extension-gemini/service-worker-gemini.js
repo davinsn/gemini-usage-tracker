@@ -139,6 +139,13 @@ chrome.runtime.onMessage.addListener(
             event.occurred_at ||
             new Date().toISOString();
 
+
+        const provider = 'google';
+        const product = 'gemini';
+
+        console.log('[gemini-obs] PROVIDER:', provider);
+        console.log('[gemini-obs] PRODUCT:', product);
+
         // --------------------------------------------------------
         // Build backend payload
         // --------------------------------------------------------
@@ -146,53 +153,33 @@ chrome.runtime.onMessage.addListener(
         const payload = {
             email: email,
 
-            department:
-                event.department ?? null,
+            provider: provider,
+            product: product,
 
-            role:
-                event.role ?? null,
+            department: event.department ?? null,
+            role: event.role ?? null,
 
-            event_type:
-                eventType,
-
-            session_id:
-                event.session_id ?? null,
-
-            interaction_id:
-                event.interaction_id ?? null,
-
-            model:
-                event.model ?? null,
-
-            occurred_at:
-                occurredAt,
-
-            latency_ms:
-                event.latency_ms ?? null,
-
-            prompt_length:
-                event.prompt_length ?? null,
-
-            response_length:
-                event.response_length ?? null,
+            event_type: eventType,
+            session_id: event.session_id ?? null,
+            interaction_id: event.interaction_id ?? null,
+            model: event.model ?? null,
+            occurred_at: occurredAt,
+            latency_ms: event.latency_ms ?? null,
+            prompt_length: event.prompt_length ?? null,
+            response_length: event.response_length ?? null,
 
             metadata: {
                 ...(event.metadata || {}),
-
-                extension:
-                    'gemini-observability',
-
+                extension: 'gemini-observability',
                 extension_version:
                     chrome.runtime.getManifest().version,
+                source: 'chrome-extension',
 
-                source:
-                    'chrome-extension',
+                provider: provider,
+                product: product,
 
-                tab_id:
-                    sender?.tab?.id ?? null,
-
-                tab_url:
-                    sender?.tab?.url ?? null
+                tab_id: sender?.tab?.id ?? null,
+                tab_url: sender?.tab?.url ?? null
             }
         };
 

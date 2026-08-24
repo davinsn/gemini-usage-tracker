@@ -195,82 +195,91 @@ chrome.runtime.onMessage.addListener(
         // --------------------------------------------------------
 
         const payload = {
+    // ====================================================
+    // IDENTITY
+    // ====================================================
 
-            // ====================================================
-            // IDENTITY
-            // ====================================================
+        email: email,
 
-            email: email,
+        provider: provider,
+        product: product,
 
-            // IMPORTANT:
-            // These MUST be sent to the backend.
-            provider: provider,
-            product: product,
+        department:
+            event.department ?? null,
 
-            department:
-                event.department ?? null,
+        role:
+            event.role ?? null,
 
-            role:
-                event.role ?? null,
+        // ====================================================
+        // EVENT
+        // ====================================================
 
-            // ====================================================
-            // EVENT
-            // ====================================================
+        event_type:
+            eventType,
 
-            event_type:
-                eventType,
+        session_id:
+            event.session_id ?? null,
 
-            session_id:
-                event.session_id ?? null,
+        interaction_id:
+            event.interaction_id ?? null,
 
-            interaction_id:
-                event.interaction_id ?? null,
+        model:
+            event.model ?? null,
 
-            model:
-                event.model ?? null,
+        occurred_at:
+            occurredAt,
 
-            occurred_at:
-                occurredAt,
+        latency_ms:
+            event.latency_ms ?? null,
 
-            latency_ms:
-                event.latency_ms ?? null,
+        prompt_length:
+            event.prompt_length ?? null,
 
-            prompt_length:
-                event.prompt_length ?? null,
+        response_length:
+            event.response_length ?? null,
 
-            response_length:
-                event.response_length ?? null,
+        // ====================================================
+        // TOKEN ESTIMATES
+        // ====================================================
 
-            // ====================================================
-            // METADATA
-            // ====================================================
+        prompt_tokens:
+            event.prompt_tokens ?? null,
 
-            metadata: {
+        response_tokens:
+            event.response_tokens ?? null,
 
-                ...(event.metadata || {}),
+        total_tokens:
+            event.total_tokens ?? null,
 
-                extension:
-                    'chatgpt-observability',
+        // ====================================================
+        // METADATA
+        // ====================================================
 
-                extension_version:
-                    chrome.runtime.getManifest().version,
+        metadata: {
+            ...(event.metadata || {}),
 
-                source:
-                    'chrome-extension',
+            extension:
+                'chatgpt-observability',
 
-                provider:
-                    provider,
+            extension_version:
+                chrome.runtime.getManifest().version,
 
-                product:
-                    product,
+            source:
+                'chrome-extension',
 
-                tab_id:
-                    sender?.tab?.id ?? null,
+            provider:
+                provider,
 
-                tab_url:
-                    sender?.tab?.url ?? null
-            }
-        };
+            product:
+                product,
+
+            tab_id:
+                sender?.tab?.id ?? null,
+
+            tab_url:
+                sender?.tab?.url ?? null
+        }
+    };
 
         // --------------------------------------------------------
         // Log final payload

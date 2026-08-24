@@ -6,7 +6,7 @@ console.log('[chatgpt-obs] ===============================');
 (() => {
 
     console.log('[chatgpt-obs] IIFE STARTED');
-    console.log('[chatgpt-obs] VERSION = DOM-V1');
+    console.log('[chatgpt-obs] VERSION = DOM-V1 + TOKEN-ESTIMATION');
 
     // ============================================================
     // CONFIG
@@ -144,6 +144,29 @@ console.log('[chatgpt-obs] ===============================');
     };
 
     // ============================================================
+    // TOKEN ESTIMATION
+    // ============================================================
+
+    const estimateTokens = (text) => {
+
+        if (!text) {
+            return 0;
+        }
+
+        /*
+         * Rough token estimate.
+         *
+         * Approximation:
+         * ~1 token per 4 characters for typical English text.
+         *
+         * This is NOT the official OpenAI tokenizer.
+         * It is intended for usage estimation only.
+         */
+
+        return Math.ceil(text.length / 4);
+    };
+
+    // ============================================================
     // ACCOUNT STATE
     // ============================================================
 
@@ -151,142 +174,155 @@ console.log('[chatgpt-obs] ===============================');
     let collectorInitialized = false;
 
     // ============================================================
-// WAIT FOR ACCOUNT
-// ============================================================
+    // WAIT FOR ACCOUNT
+    // ============================================================
 
-let accountObserver = null;
-let accountDetectionStarted = false;
+    let accountObserver = null;
+    let accountDetectionStarted = false;
 
-const handleDetectedAccount = (detectedEmail) => {
+    const handleDetectedAccount = (detectedEmail) => {
 
-    if (!detectedEmail) {
-        return;
-    }
-
-    const normalizedEmail =
-        detectedEmail.toLowerCase().trim();
-
-    // Already detected
-    if (employeeEmail === normalizedEmail) {
-        return;
-    }
-
-    employeeEmail = normalizedEmail;
-
-    console.log(
-        '[chatgpt-obs] ================================='
-    );
-
-    console.log(
-        '[chatgpt-obs] REAL CHATGPT ACCOUNT DETECTED'
-    );
-
-    console.log(
-        '[chatgpt-obs] Employee:',
-        employeeEmail
-    );
-
-    console.log(
-        '[chatgpt-obs] ================================='
-    );
-
-    // Stop watching once we know the account
-    if (accountObserver) {
-        accountObserver.disconnect();
-        accountObserver = null;
-    }
-
-    initializeCollector();
-};
-
-const detectAccountImmediately = () => {
-
-    console.log(
-        '[chatgpt-obs] Checking ChatGPT account immediately...'
-    );
-
-    const detectedEmail =
-        detectChatGPTAccountEmail();
-
-    if (detectedEmail) {
-        handleDetectedAccount(detectedEmail);
-        return true;
-    }
-
-    return false;
-};
-
-const waitForChatGPTAccount = () => {
-
-    if (accountDetectionStarted) {
-        return;
-    }
-
-    accountDetectionStarted = true;
-
-    console.log(
-        '[chatgpt-obs] Starting immediate account detection...'
-    );
-
-    // ========================================================
-    // FIRST CHECK — DO NOT WAIT
-    // ========================================================
-
-    if (detectAccountImmediately()) {
-        return;
-    }
-
-    console.log(
-        '[chatgpt-obs] Account not present yet.'
-    );
-
-    console.log(
-        '[chatgpt-obs] Watching DOM for account information...'
-    );
-
-    // ========================================================
-    // WATCH DOM
-    // ========================================================
-
-    accountObserver =
-        new MutationObserver(() => {
-
-            // Don't keep searching after account is found
-            if (employeeEmail) {
-                return;
-            }
-
-            const detectedEmail =
-                detectChatGPTAccountEmail();
-
-            if (detectedEmail) {
-                handleDetectedAccount(detectedEmail);
-            }
-        });
-
-    const startObserver = () => {
-
-        if (!document.documentElement) {
-            requestAnimationFrame(startObserver);
+        if (!detectedEmail) {
             return;
         }
 
-        accountObserver.observe(
-            document.documentElement,
-            {
-                childList: true,
-                subtree: true,
-                characterData: true,
-                attributes: true
-            }
+        const normalizedEmail =
+            detectedEmail.toLowerCase().trim();
+
+        // Already detected
+        if (employeeEmail === normalizedEmail) {
+            return;
+        }
+
+        employeeEmail = normalizedEmail;
+
+        console.log(
+            '[chatgpt-obs] ================================='
         );
 
-        // Check once more after observer is attached
-        detectAccountImmediately();
+        console.log(
+            '[chatgpt-obs] REAL CHATGPT ACCOUNT DETECTED'
+        );
+
+        console.log(
+            '[chatgpt-obs] Employee:',
+            employeeEmail
+        );
+
+        console.log(
+            '[chatgpt-obs] ================================='
+        );
+
+        // Stop watching once we know the account
+        if (accountObserver) {
+
+            accountObserver.disconnect();
+
+            accountObserver = null;
+        }
+
+        initializeCollector();
     };
 
-    startObserver();
-};
+    const detectAccountImmediately = () => {
+
+        console.log(
+            '[chatgpt-obs] Checking ChatGPT account immediately...'
+        );
+
+        const detectedEmail =
+            detectChatGPTAccountEmail();
+
+        if (detectedEmail) {
+
+            handleDetectedAccount(
+                detectedEmail
+            );
+
+            return true;
+        }
+
+        return false;
+    };
+
+    const waitForChatGPTAccount = () => {
+
+        if (accountDetectionStarted) {
+            return;
+        }
+
+        accountDetectionStarted = true;
+
+        console.log(
+            '[chatgpt-obs] Starting immediate account detection...'
+        );
+
+        // ========================================================
+        // FIRST CHECK — DO NOT WAIT
+        // ========================================================
+
+        if (detectAccountImmediately()) {
+            return;
+        }
+
+        console.log(
+            '[chatgpt-obs] Account not present yet.'
+        );
+
+        console.log(
+            '[chatgpt-obs] Watching DOM for account information...'
+        );
+
+        // ========================================================
+        // WATCH DOM
+        // ========================================================
+
+        accountObserver =
+            new MutationObserver(() => {
+
+                // Don't keep searching after account is found
+                if (employeeEmail) {
+                    return;
+                }
+
+                const detectedEmail =
+                    detectChatGPTAccountEmail();
+
+                if (detectedEmail) {
+
+                    handleDetectedAccount(
+                        detectedEmail
+                    );
+                }
+            });
+
+        const startObserver = () => {
+
+            if (!document.documentElement) {
+
+                requestAnimationFrame(
+                    startObserver
+                );
+
+                return;
+            }
+
+            accountObserver.observe(
+                document.documentElement,
+                {
+                    childList: true,
+                    subtree: true,
+                    characterData: true,
+                    attributes: true
+                }
+            );
+
+            // Check once more after observer is attached
+            detectAccountImmediately();
+        };
+
+        startObserver();
+    };
 
     // ============================================================
     // INITIALIZE COLLECTOR
@@ -313,8 +349,11 @@ const waitForChatGPTAccount = () => {
             crypto.randomUUID();
 
         let activeInteraction = null;
+
         let lastPromptSignature = null;
+
         let lastKnownPrompt = '';
+
         let completionTimer = null;
 
         // Prevent Enter + Send button from firing twice
@@ -346,26 +385,44 @@ const waitForChatGPTAccount = () => {
             }
 
             const payload = {
-                type: 'CHATGPT_USAGE_EVENT',
 
-                provider: 'openai',
-                product: 'chatgpt',
+                type:
+                    'CHATGPT_USAGE_EVENT',
 
-                employeeEmail: employeeEmail,
+                provider:
+                    'openai',
+
+                product:
+                    'chatgpt',
+
+                employeeEmail:
+                    employeeEmail,
 
                 event: {
-                    email: employeeEmail,
-                    employeeEmail: employeeEmail,
 
-                    provider: 'openai',
-                    product: 'chatgpt',
+                    email:
+                        employeeEmail,
 
-                    department: cfg.department ?? null,
-                    role: cfg.role ?? null,
+                    employeeEmail:
+                        employeeEmail,
 
-                    session_id: sessionId,
+                    provider:
+                        'openai',
 
-                    occurred_at: new Date().toISOString(),
+                    product:
+                        'chatgpt',
+
+                    department:
+                        cfg.department ?? null,
+
+                    role:
+                        cfg.role ?? null,
+
+                    session_id:
+                        sessionId,
+
+                    occurred_at:
+                        new Date().toISOString(),
 
                     ...event
                 }
@@ -399,7 +456,6 @@ const waitForChatGPTAccount = () => {
             );
 
             chrome.runtime.sendMessage(payload)
-
                 .then(response => {
 
                     console.log(
@@ -468,7 +524,9 @@ const waitForChatGPTAccount = () => {
                     el.getAttribute('contenteditable') === 'true'
                 );
 
-            return composer || visible[0] || null;
+            return composer ||
+                visible[0] ||
+                null;
         };
 
         // ========================================================
@@ -485,6 +543,7 @@ const waitForChatGPTAccount = () => {
                 input instanceof HTMLTextAreaElement ||
                 input instanceof HTMLInputElement
             ) {
+
                 return input.value || '';
             }
 
@@ -494,43 +553,6 @@ const waitForChatGPTAccount = () => {
                 ''
             );
         };
-
-        // ========================================================
-        // CACHE PROMPT WHILE USER TYPES
-        // ========================================================
-
-        // document.addEventListener(
-        //     'input',
-        //     event => {
-
-        //         const input =
-        //             findPromptInput();
-
-        //         if (!input) {
-        //             return;
-        //         }
-
-        //         if (
-        //             event.target === input ||
-        //             input.contains?.(event.target)
-        //         ) {
-
-        //             const text =
-        //                 getInputText(input).trim();
-
-        //             if (text) {
-
-        //                 lastKnownPrompt = text;
-
-        //                 console.log(
-        //                     '[chatgpt-obs] Cached prompt:',
-        //                     lastKnownPrompt
-        //                 );
-        //             }
-        //         }
-        //     },
-        //     true
-        // );
 
         // ========================================================
         // START INTERACTION
@@ -600,6 +622,18 @@ const waitForChatGPTAccount = () => {
                 prompt.length
             );
 
+            // ====================================================
+            // ESTIMATE PROMPT TOKENS
+            // ====================================================
+
+            const promptTokens =
+                estimateTokens(prompt);
+
+            console.log(
+                '[chatgpt-obs] Estimated prompt tokens:',
+                promptTokens
+            );
+
             console.log(
                 '[chatgpt-obs] ================================='
             );
@@ -653,7 +687,10 @@ const waitForChatGPTAccount = () => {
                 prompt,
 
                 promptLength:
-                    prompt.length
+                    prompt.length,
+
+                promptTokens:
+                    promptTokens
             };
 
             send({
@@ -667,13 +704,19 @@ const waitForChatGPTAccount = () => {
                 prompt_length:
                     prompt.length,
 
+                prompt_tokens:
+                    promptTokens,
+
                 metadata: {
 
                     collector:
                         'dom-v1',
 
                     prompt_capture:
-                        'pre-submit'
+                        'pre-submit',
+
+                    token_estimation:
+                        'characters-divided-by-4'
                 }
             });
 
@@ -742,6 +785,21 @@ const waitForChatGPTAccount = () => {
             const responseLength =
                 response.length;
 
+            // ====================================================
+            // ESTIMATE RESPONSE TOKENS
+            // ====================================================
+
+            const responseTokens =
+                estimateTokens(response);
+
+            // ====================================================
+            // ESTIMATE TOTAL TOKENS
+            // ====================================================
+
+            const totalTokens =
+                interaction.promptTokens +
+                responseTokens;
+
             console.log(
                 '[chatgpt-obs] COMPLETING INTERACTION'
             );
@@ -761,6 +819,21 @@ const waitForChatGPTAccount = () => {
                 latency
             );
 
+            console.log(
+                '[chatgpt-obs] Estimated prompt tokens:',
+                interaction.promptTokens
+            );
+
+            console.log(
+                '[chatgpt-obs] Estimated response tokens:',
+                responseTokens
+            );
+
+            console.log(
+                '[chatgpt-obs] Estimated total tokens:',
+                totalTokens
+            );
+
             send({
 
                 event_type:
@@ -775,6 +848,15 @@ const waitForChatGPTAccount = () => {
                 response_length:
                     responseLength,
 
+                prompt_tokens:
+                    interaction.promptTokens,
+
+                response_tokens:
+                    responseTokens,
+
+                total_tokens:
+                    totalTokens,
+
                 latency_ms:
                     latency,
 
@@ -784,7 +866,10 @@ const waitForChatGPTAccount = () => {
                         'dom-v1',
 
                     completion_detection:
-                        'mutation-idle'
+                        'mutation-idle',
+
+                    token_estimation:
+                        'characters-divided-by-4'
                 }
             });
 
@@ -848,15 +933,12 @@ const waitForChatGPTAccount = () => {
                 }
 
                 const combined = [
-
                     button.getAttribute(
                         'aria-label'
                     ),
-
                     button.getAttribute(
                         'title'
                     ),
-
                     button.innerText
                 ]
                     .filter(Boolean)
@@ -953,6 +1035,11 @@ const waitForChatGPTAccount = () => {
         console.log(
             '[chatgpt-obs] Session:',
             sessionId
+        );
+
+        console.log(
+            '[chatgpt-obs] Token estimation:',
+            'ENABLED'
         );
 
         console.log(
