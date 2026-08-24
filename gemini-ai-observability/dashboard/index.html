@@ -1,6 +1,6 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
 
@@ -11,7 +11,10 @@
 
     <title>AI Observability Dashboard</title>
 
-    <link rel="stylesheet" href="style.css">
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -49,13 +52,17 @@
     <section class="overview-section">
 
         <div class="section-title">
+
             <div>
+
                 <h2>Overview</h2>
 
                 <p>
                     Overall AI activity across your organization
                 </p>
+
             </div>
+
         </div>
 
 
@@ -137,12 +144,12 @@
             </div>
 
 
-            <!-- TOKENS -->
+            <!-- ESTIMATED TOTAL TOKENS -->
 
             <div class="metric-card">
 
                 <span class="metric-label">
-                    Total Tokens
+                    Estimated Tokens
                 </span>
 
                 <strong id="tokens">
@@ -150,7 +157,7 @@
                 </strong>
 
                 <span class="metric-description">
-                    Total tokens processed
+                    Estimated tokens processed
                 </span>
 
             </div>
@@ -169,11 +176,13 @@
         <div class="section-title">
 
             <div>
+
                 <h2>AI Platforms</h2>
 
                 <p>
                     See which AI platforms your employees are using
                 </p>
+
             </div>
 
         </div>
@@ -200,11 +209,13 @@
         <div class="section-title">
 
             <div>
+
                 <h2>Usage Overview</h2>
 
                 <p>
                     Compare activity across AI platforms
                 </p>
+
             </div>
 
         </div>
@@ -212,24 +223,27 @@
 
         <div class="charts">
 
-            <!-- =================================================
-                 INTERACTIONS BY AI
-            ================================================== -->
+            <!-- INTERACTIONS BY AI -->
 
             <div class="chart-card">
 
                 <div class="chart-header">
 
                     <div>
-                        <h2>Interactions by AI</h2>
+
+                        <h2>
+                            Interactions by AI
+                        </h2>
 
                         <p>
                             Number of interactions recorded for
                             each AI platform
                         </p>
+
                     </div>
 
                 </div>
+
 
                 <div class="chart-container">
 
@@ -242,29 +256,102 @@
             </div>
 
 
-            <!-- =================================================
-                 SESSIONS BY AI
-            ================================================== -->
+            <!-- SESSIONS BY AI -->
 
             <div class="chart-card">
 
                 <div class="chart-header">
 
                     <div>
-                        <h2>Sessions by AI</h2>
+
+                        <h2>
+                            Sessions by AI
+                        </h2>
 
                         <p>
                             Number of sessions started on each
                             AI platform
                         </p>
+
                     </div>
 
                 </div>
+
 
                 <div class="chart-container">
 
                     <canvas
                         id="providerSessionChart"
+                    ></canvas>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         TOKEN USAGE
+    ====================================================== -->
+
+    <section class="dashboard-section">
+
+        <div class="section-title">
+
+            <div>
+
+                <h2>Token Usage</h2>
+
+                <p>
+                    Estimated token consumption across AI platforms
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="charts">
+
+            <!-- TOKENS BY AI -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Estimated Tokens by AI
+                        </h2>
+
+                        <p>
+                            Estimated total tokens processed by
+                            each AI platform
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="providerTokenChart"
+                    ></canvas>
+
+                </div>
+
+            </div>
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="tokenTypeChart"
                     ></canvas>
 
                 </div>
@@ -285,11 +372,13 @@
         <div class="section-title">
 
             <div>
+
                 <h2>Employee Usage</h2>
 
                 <p>
                     Understand how employees are using AI
                 </p>
+
             </div>
 
         </div>
@@ -297,9 +386,7 @@
 
         <div class="charts">
 
-            <!-- =================================================
-                 INTERACTIONS BY EMPLOYEE
-            ================================================== -->
+            <!-- INTERACTIONS BY EMPLOYEE -->
 
             <div class="chart-card wide">
 
@@ -307,7 +394,9 @@
 
                     <div>
 
-                        <h2>Interactions by Employee</h2>
+                        <h2>
+                            Interactions by Employee
+                        </h2>
 
                         <p>
                             Total AI interactions for each employee
@@ -329,9 +418,7 @@
             </div>
 
 
-            <!-- =================================================
-                 AI USAGE BY EMPLOYEE
-            ================================================== -->
+            <!-- AI USAGE BY EMPLOYEE -->
 
             <div class="chart-card wide">
 
@@ -339,7 +426,9 @@
 
                     <div>
 
-                        <h2>AI Usage by Employee</h2>
+                        <h2>
+                            AI Usage by Employee
+                        </h2>
 
                         <p>
                             Compare AI platform usage across employees
@@ -374,11 +463,13 @@
         <div class="section-title">
 
             <div>
+
                 <h2>Platform Performance</h2>
 
                 <p>
                     Compare response performance across AI platforms
                 </p>
+
             </div>
 
         </div>
@@ -386,9 +477,7 @@
 
         <div class="charts">
 
-            <!-- =================================================
-                 LATENCY
-            ================================================== -->
+            <!-- LATENCY -->
 
             <div class="chart-card wide">
 
@@ -396,7 +485,9 @@
 
                     <div>
 
-                        <h2>Average Response Latency</h2>
+                        <h2>
+                            Average Response Latency
+                        </h2>
 
                         <p>
                             Average time taken for each AI platform
@@ -433,10 +524,13 @@
 
             <div>
 
-                <h2>Employee AI Usage</h2>
+                <h2>
+                    Employee AI Usage
+                </h2>
 
                 <p>
-                    Detailed breakdown of AI activity by employee
+                    Detailed breakdown of AI activity and estimated
+                    token usage by employee
                 </p>
 
             </div>
@@ -494,6 +588,18 @@
                                 Avg Latency
                             </th>
 
+                            <th>
+                                Est. Input Tokens
+                            </th>
+
+                            <th>
+                                Est. Output Tokens
+                            </th>
+
+                            <th>
+                                Est. Total Tokens
+                            </th>
+
                         </tr>
 
                     </thead>
@@ -540,5 +646,5 @@
 <script src="dashboard.js"></script>
 
 </body>
+
 </html>
-```

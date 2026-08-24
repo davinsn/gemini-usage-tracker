@@ -1,13 +1,17 @@
 // ============================================================
-// GEMINI OBSERVABILITY - MULTI-AI DASHBOARD
+// AI OBSERVABILITY - MULTI-AI DASHBOARD
 // ============================================================
 
-// Chart instances
+// ============================================================
+// CHART INSTANCES
+// ============================================================
+
 let employeeInteractionChart;
 let providerInteractionChart;
 let providerSessionChart;
 let employeeAiChart;
 let latencyChart;
+let providerTokenChart;
 
 
 // ============================================================
@@ -17,8 +21,6 @@ let latencyChart;
 const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-
-    // Disable animation so charts don't continuously animate
     animation: false,
 
     plugins: {
@@ -65,7 +67,54 @@ const AI_PRODUCTS = {
         name: 'Perplexity',
         provider: 'Perplexity'
     }
+
 };
+
+
+// ============================================================
+// NUMBER FORMATTER
+// ============================================================
+
+function formatNumber(value) {
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return '0';
+    }
+
+    return number.toLocaleString();
+}
+
+
+// ============================================================
+// TOKEN VALUE HELPER
+// ============================================================
+// Supports different possible backend field names.
+//
+// Preferred:
+// total_tokens
+//
+// Also supports:
+// estimated_tokens
+// tokens
+//
+// This makes the dashboard more tolerant of backend changes.
+// ============================================================
+
+function getTokenValue(row) {
+
+    if (!row) {
+        return 0;
+    }
+
+    return Number(
+        row.total_tokens ??
+        row.estimated_tokens ??
+        row.tokens ??
+        0
+    ) || 0;
+}
 
 
 // ============================================================
@@ -93,12 +142,13 @@ async function loadDashboard() {
             fetch('/api/usage/by-product'),
 
             fetch('/api/usage/by-employee-product')
+
         ]);
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // CHECK API RESPONSES
-        // ----------------------------------------------------
+        // ====================================================
 
         if (
             !summaryResponse.ok ||
@@ -111,12 +161,13 @@ async function loadDashboard() {
             throw new Error(
                 'One or more API requests failed'
             );
+
         }
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // PARSE JSON
-        // ----------------------------------------------------
+        // ====================================================
 
         const summary =
             await summaryResponse.json();
@@ -134,9 +185,9 @@ async function loadDashboard() {
             await employeeProductResponse.json();
 
 
-        // ----------------------------------------------------
-        // DEBUG LOGGING
-        // ----------------------------------------------------
+        // ====================================================
+        // DEBUG
+        // ====================================================
 
         console.log('=================================');
         console.log('AI OBSERVABILITY DASHBOARD');
@@ -144,36 +195,34 @@ async function loadDashboard() {
 
         console.log('Summary:', summary);
 
-        console.log(
-            'Employees:',
-            employees
-        );
+        console.log('Employees:', employees);
 
-        console.log(
-            'Providers:',
-            providers
-        );
+        console.log('Providers:', providers);
 
-        console.log(
-            'Products:',
-            products
-        );
+        console.log('Products:', products);
 
         console.log(
             'Employee Products:',
             employeeProducts
         );
 
+        console.log(
+            'TOTAL ESTIMATED TOKENS:',
+            getTokenValue(summary)
+        );
 
-        // ----------------------------------------------------
+
+        // ====================================================
         // UPDATE DASHBOARD
-        // ----------------------------------------------------
+        // ====================================================
 
         updateMetrics(summary);
 
         updateEmployeeCharts(employees);
 
         updateProviderCharts(providers);
+
+        updateTokenChart(providers);
 
         updateEmployeeProductChart(
             employeeProducts
@@ -184,9 +233,9 @@ async function loadDashboard() {
         updateAIStatus(products);
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // LAST UPDATED
-        // ----------------------------------------------------
+        // ====================================================
 
         const lastUpdated =
             document.getElementById(
@@ -197,6 +246,7 @@ async function loadDashboard() {
 
             lastUpdated.textContent =
                 new Date().toLocaleTimeString();
+
         }
 
     }
@@ -207,7 +257,9 @@ async function loadDashboard() {
             'Dashboard loading failed:',
             error
         );
+
     }
+
 }
 
 
@@ -217,9 +269,9 @@ async function loadDashboard() {
 
 function updateMetrics(summary) {
 
-    // --------------------------------------------------------
+    // ========================================================
     // TOTAL INTERACTIONS
-    // --------------------------------------------------------
+    // ========================================================
 
     const interactions =
         document.getElementById(
@@ -229,13 +281,16 @@ function updateMetrics(summary) {
     if (interactions) {
 
         interactions.textContent =
-            Number(summary.interactions) || 0;
+            formatNumber(
+                summary.interactions
+            );
+
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // TOTAL SESSIONS
-    // --------------------------------------------------------
+    // ========================================================
 
     const sessions =
         document.getElementById(
@@ -245,13 +300,16 @@ function updateMetrics(summary) {
     if (sessions) {
 
         sessions.textContent =
-            Number(summary.sessions) || 0;
+            formatNumber(
+                summary.sessions
+            );
+
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // ACTIVE EMPLOYEES
-    // --------------------------------------------------------
+    // ========================================================
 
     const employees =
         document.getElementById(
@@ -261,15 +319,16 @@ function updateMetrics(summary) {
     if (employees) {
 
         employees.textContent =
-            Number(
+            formatNumber(
                 summary.active_employees
-            ) || 0;
+            );
+
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // AVERAGE LATENCY
-    // --------------------------------------------------------
+    // ========================================================
 
     const latency =
         document.getElementById(
@@ -280,14 +339,19 @@ function updateMetrics(summary) {
 
         latency.textContent =
             summary.avg_latency_ms != null
-                ? `${summary.avg_latency_ms} ms`
+
+                ? `${Number(
+                    summary.avg_latency_ms
+                ).toFixed(0)} ms`
+
                 : 'N/A';
+
     }
 
 
-    // --------------------------------------------------------
-    // TOTAL TOKENS
-    // --------------------------------------------------------
+    // ========================================================
+    // TOTAL ESTIMATED TOKENS
+    // ========================================================
 
     const tokens =
         document.getElementById(
@@ -297,10 +361,12 @@ function updateMetrics(summary) {
     if (tokens) {
 
         tokens.textContent =
-            Number(
-                summary.total_tokens
-            ) || 0;
+            formatNumber(
+                getTokenValue(summary)
+            );
+
     }
+
 }
 
 
@@ -321,20 +387,20 @@ function updateEmployeeCharts(employees) {
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // LABELS
-    // --------------------------------------------------------
+    // ========================================================
 
     const labels =
         employees.map(
             employee =>
-                employee.email
+                employee.email || 'Unknown'
         );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // INTERACTIONS
-    // --------------------------------------------------------
+    // ========================================================
 
     const interactions =
         employees.map(
@@ -345,15 +411,14 @@ function updateEmployeeCharts(employees) {
         );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // CANVAS
-    // --------------------------------------------------------
+    // ========================================================
 
     const canvas =
         document.getElementById(
             'employeeInteractionChart'
         );
-
 
     if (!canvas) {
 
@@ -365,9 +430,9 @@ function updateEmployeeCharts(employees) {
     }
 
 
-    // --------------------------------------------------------
-    // UPDATE EXISTING CHART
-    // --------------------------------------------------------
+    // ========================================================
+    // UPDATE
+    // ========================================================
 
     if (employeeInteractionChart) {
 
@@ -383,15 +448,14 @@ function updateEmployeeCharts(employees) {
     }
 
 
-    // --------------------------------------------------------
-    // CREATE CHART
-    // --------------------------------------------------------
+    // ========================================================
+    // CREATE
+    // ========================================================
 
     employeeInteractionChart =
         new Chart(
             canvas,
             {
-
                 type: 'bar',
 
                 data: {
@@ -401,12 +465,9 @@ function updateEmployeeCharts(employees) {
                     datasets: [
 
                         {
+                            label: 'Interactions',
 
-                            label:
-                                'Interactions',
-
-                            data:
-                                interactions
+                            data: interactions
                         }
 
                     ]
@@ -415,6 +476,7 @@ function updateEmployeeCharts(employees) {
                 options: chartOptions
             }
         );
+
 }
 
 
@@ -435,22 +497,23 @@ function updateProviderCharts(providers) {
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // LABELS
-    // --------------------------------------------------------
+    // ========================================================
 
     const labels =
         providers.map(
             provider =>
                 formatProductName(
-                    provider.provider
+                    provider.provider ||
+                    provider.product
                 )
         );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // INTERACTIONS
-    // --------------------------------------------------------
+    // ========================================================
 
     const interactions =
         providers.map(
@@ -461,9 +524,9 @@ function updateProviderCharts(providers) {
         );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // SESSIONS
-    // --------------------------------------------------------
+    // ========================================================
 
     const sessions =
         providers.map(
@@ -474,9 +537,9 @@ function updateProviderCharts(providers) {
         );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // LATENCY
-    // --------------------------------------------------------
+    // ========================================================
 
     const latency =
         providers.map(
@@ -496,57 +559,52 @@ function updateProviderCharts(providers) {
             'providerInteractionChart'
         );
 
+    if (interactionCanvas) {
 
-    if (!interactionCanvas) {
+        if (providerInteractionChart) {
 
-        console.error(
-            'Canvas not found: providerInteractionChart'
-        );
+            providerInteractionChart.data.labels =
+                labels;
 
-    }
+            providerInteractionChart.data.datasets[0].data =
+                interactions;
 
-    else if (providerInteractionChart) {
+            providerInteractionChart.update('none');
 
-        providerInteractionChart.data.labels =
-            labels;
+        }
 
-        providerInteractionChart.data.datasets[0].data =
-            interactions;
+        else {
 
-        providerInteractionChart.update('none');
+            providerInteractionChart =
+                new Chart(
+                    interactionCanvas,
+                    {
 
-    }
+                        type: 'bar',
 
-    else {
+                        data: {
 
-        providerInteractionChart =
-            new Chart(
-                interactionCanvas,
-                {
+                            labels: labels,
 
-                    type: 'bar',
+                            datasets: [
 
-                    data: {
+                                {
+                                    label: 'Interactions',
 
-                        labels: labels,
+                                    data: interactions
+                                }
 
-                        datasets: [
+                            ]
 
-                            {
+                        },
 
-                                label:
-                                    'Interactions',
+                        options: chartOptions
 
-                                data:
-                                    interactions
-                            }
+                    }
+                );
 
-                        ]
-                    },
+        }
 
-                    options: chartOptions
-                }
-            );
     }
 
 
@@ -559,62 +617,57 @@ function updateProviderCharts(providers) {
             'providerSessionChart'
         );
 
+    if (sessionCanvas) {
 
-    if (!sessionCanvas) {
+        if (providerSessionChart) {
 
-        console.error(
-            'Canvas not found: providerSessionChart'
-        );
+            providerSessionChart.data.labels =
+                labels;
 
-    }
+            providerSessionChart.data.datasets[0].data =
+                sessions;
 
-    else if (providerSessionChart) {
+            providerSessionChart.update('none');
 
-        providerSessionChart.data.labels =
-            labels;
+        }
 
-        providerSessionChart.data.datasets[0].data =
-            sessions;
+        else {
 
-        providerSessionChart.update('none');
+            providerSessionChart =
+                new Chart(
+                    sessionCanvas,
+                    {
 
-    }
+                        type: 'bar',
 
-    else {
+                        data: {
 
-        providerSessionChart =
-            new Chart(
-                sessionCanvas,
-                {
+                            labels: labels,
 
-                    type: 'bar',
+                            datasets: [
 
-                    data: {
+                                {
+                                    label: 'Sessions',
 
-                        labels: labels,
+                                    data: sessions
+                                }
 
-                        datasets: [
+                            ]
 
-                            {
+                        },
 
-                                label:
-                                    'Sessions',
+                        options: chartOptions
 
-                                data:
-                                    sessions
-                            }
+                    }
+                );
 
-                        ]
-                    },
+        }
 
-                    options: chartOptions
-                }
-            );
     }
 
 
     // ========================================================
-    // AVERAGE LATENCY BY AI
+    // LATENCY BY AI
     // ========================================================
 
     const latencyCanvas =
@@ -622,58 +675,213 @@ function updateProviderCharts(providers) {
             'latencyChart'
         );
 
+    if (latencyCanvas) {
 
-    if (!latencyCanvas) {
+        if (latencyChart) {
+
+            latencyChart.data.labels =
+                labels;
+
+            latencyChart.data.datasets[0].data =
+                latency;
+
+            latencyChart.update('none');
+
+        }
+
+        else {
+
+            latencyChart =
+                new Chart(
+                    latencyCanvas,
+                    {
+
+                        type: 'bar',
+
+                        data: {
+
+                            labels: labels,
+
+                            datasets: [
+
+                                {
+                                    label:
+                                        'Average Latency (ms)',
+
+                                    data: latency
+                                }
+
+                            ]
+
+                        },
+
+                        options: chartOptions
+
+                    }
+                );
+
+        }
+
+    }
+
+}
+
+
+// ============================================================
+// TOKEN USAGE BY AI
+// ============================================================
+
+function updateTokenChart(providers) {
+
+    if (!Array.isArray(providers)) {
 
         console.error(
-            'Canvas not found: latencyChart'
+            'Provider token data is not an array:',
+            providers
         );
 
+        return;
     }
 
-    else if (latencyChart) {
 
-        latencyChart.data.labels =
+    const canvas =
+        document.getElementById(
+            'providerTokenChart'
+        );
+
+    if (!canvas) {
+
+        console.error(
+            'Canvas not found: providerTokenChart'
+        );
+
+        return;
+    }
+
+
+    // ========================================================
+    // LABELS
+    // ========================================================
+
+    const labels =
+        providers.map(
+            provider =>
+                formatProductName(
+                    provider.product ||
+                    provider.provider
+                )
+        );
+
+
+    // ========================================================
+    // ESTIMATED TOKENS
+    // ========================================================
+
+    const tokens =
+        providers.map(
+            provider =>
+                getTokenValue(provider)
+        );
+
+
+    console.log(
+        'Token chart data:',
+        providers.map(
+            provider => ({
+                provider:
+                    provider.provider,
+
+                product:
+                    provider.product,
+
+                tokens:
+                    getTokenValue(provider)
+            })
+        )
+    );
+
+
+    // ========================================================
+    // UPDATE EXISTING CHART
+    // ========================================================
+
+    if (providerTokenChart) {
+
+        providerTokenChart.data.labels =
             labels;
 
-        latencyChart.data.datasets[0].data =
-            latency;
+        providerTokenChart.data.datasets[0].data =
+            tokens;
 
-        latencyChart.update('none');
+        providerTokenChart.update('none');
 
+        return;
     }
 
-    else {
 
-        latencyChart =
-            new Chart(
-                latencyCanvas,
-                {
+    // ========================================================
+    // CREATE CHART
+    // ========================================================
 
-                    type: 'bar',
+    providerTokenChart =
+        new Chart(
+            canvas,
+            {
 
-                    data: {
+                type: 'bar',
 
-                        labels: labels,
+                data: {
 
-                        datasets: [
+                    labels: labels,
 
-                            {
+                    datasets: [
 
-                                label:
-                                    'Average Latency (ms)',
+                        {
+                            label:
+                                'Estimated Tokens',
 
-                                data:
-                                    latency
+                            data:
+                                tokens
+                        }
+
+                    ]
+
+                },
+
+                options: {
+
+                    ...chartOptions,
+
+                    plugins: {
+
+                        ...chartOptions.plugins,
+
+                        tooltip: {
+
+                            callbacks: {
+
+                                label: function(context) {
+
+                                    return (
+                                        'Estimated Tokens: ' +
+                                        formatNumber(
+                                            context.raw
+                                        )
+                                    );
+
+                                }
+
                             }
 
-                        ]
-                    },
+                        }
 
-                    options: chartOptions
+                    }
+
                 }
-            );
-    }
+
+            }
+        );
+
 }
 
 
@@ -696,15 +904,10 @@ function updateEmployeeProductChart(
     }
 
 
-    // --------------------------------------------------------
-    // CANVAS
-    // --------------------------------------------------------
-
     const canvas =
         document.getElementById(
             'employeeAiChart'
         );
-
 
     if (!canvas) {
 
@@ -716,35 +919,37 @@ function updateEmployeeProductChart(
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // EMPLOYEES
-    // --------------------------------------------------------
+    // ========================================================
 
     const employees = [
         ...new Set(
             employeeProducts.map(
-                row => row.email
+                row =>
+                    row.email
             )
         )
     ];
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // PRODUCTS
-    // --------------------------------------------------------
+    // ========================================================
 
     const products = [
         ...new Set(
             employeeProducts.map(
-                row => row.product
+                row =>
+                    row.product
             )
         )
     ];
 
 
-    // --------------------------------------------------------
-    // DATASETS
-    // --------------------------------------------------------
+    // ========================================================
+    // INTERACTION DATASETS
+    // ========================================================
 
     const datasets =
         products.map(
@@ -770,22 +975,24 @@ function updateEmployeeProductChart(
                                                 product
                                     );
 
-
                                 return row
                                     ? Number(
                                         row.interactions
                                     ) || 0
                                     : 0;
+
                             }
                         )
+
                 };
+
             }
         );
 
 
-    // --------------------------------------------------------
-    // UPDATE EXISTING CHART
-    // --------------------------------------------------------
+    // ========================================================
+    // UPDATE
+    // ========================================================
 
     if (employeeAiChart) {
 
@@ -801,9 +1008,9 @@ function updateEmployeeProductChart(
     }
 
 
-    // --------------------------------------------------------
-    // CREATE CHART
-    // --------------------------------------------------------
+    // ========================================================
+    // CREATE
+    // ========================================================
 
     employeeAiChart =
         new Chart(
@@ -819,6 +1026,7 @@ function updateEmployeeProductChart(
 
                     datasets:
                         datasets
+
                 },
 
                 options: {
@@ -842,9 +1050,12 @@ function updateEmployeeProductChart(
                         }
 
                     }
+
                 }
+
             }
         );
+
 }
 
 
@@ -858,7 +1069,6 @@ function updateTable(employees) {
         document.getElementById(
             'employeeTable'
         );
-
 
     if (!table) {
 
@@ -882,9 +1092,9 @@ function updateTable(employees) {
                 );
 
 
-            // ------------------------------------------------
-            // Determine AI usage
-            // ------------------------------------------------
+            // ==================================================
+            // AI INTERACTIONS
+            // ==================================================
 
             const gemini =
                 Number(
@@ -912,9 +1122,9 @@ function updateTable(employees) {
                 ) || 0;
 
 
-            // ------------------------------------------------
-            // Total
-            // ------------------------------------------------
+            // ==================================================
+            // TOTAL INTERACTIONS
+            // ==================================================
 
             const total =
                 Number(
@@ -929,9 +1139,17 @@ function updateTable(employees) {
                 );
 
 
-            // ------------------------------------------------
-            // Table row
-            // ------------------------------------------------
+            // ==================================================
+            // ESTIMATED TOKENS
+            // ==================================================
+
+            const totalTokens =
+                getTokenValue(employee);
+
+
+            // ==================================================
+            // TABLE ROW
+            // ==================================================
 
             row.innerHTML = `
 
@@ -944,46 +1162,56 @@ function updateTable(employees) {
                 </td>
 
                 <td>
-                    ${gemini}
+                    ${formatNumber(gemini)}
                 </td>
 
                 <td>
-                    ${chatgpt}
+                    ${formatNumber(chatgpt)}
                 </td>
 
                 <td>
-                    ${claude}
+                    ${formatNumber(claude)}
                 </td>
 
                 <td>
-                    ${copilot}
+                    ${formatNumber(copilot)}
                 </td>
 
                 <td>
-                    ${perplexity}
+                    ${formatNumber(perplexity)}
                 </td>
 
                 <td>
-                    ${total}
+                    ${formatNumber(total)}
                 </td>
 
                 <td>
-                    ${Number(employee.sessions) || 0}
+                    ${formatNumber(
+                        employee.sessions
+                    )}
                 </td>
 
                 <td>
                     ${
                         employee.avg_latency_ms != null
-                            ? employee.avg_latency_ms + ' ms'
+                            ? Number(
+                                employee.avg_latency_ms
+                            ).toFixed(0) + ' ms'
                             : 'N/A'
                     }
                 </td>
+
+                <td>
+                    ${formatNumber(totalTokens)}
+                </td>
+
             `;
 
-
             table.appendChild(row);
+
         }
     );
+
 }
 
 
@@ -998,15 +1226,11 @@ function updateAIStatus(products) {
             '.status'
         );
 
-
     if (!status) {
-
         return;
     }
 
-
     if (!Array.isArray(products)) {
-
         return;
     }
 
@@ -1025,14 +1249,19 @@ function updateAIStatus(products) {
         <span class="status-dot"></span>
 
         ${activeProducts.length}
+
         AI
+
         ${
             activeProducts.length === 1
                 ? 'Product'
                 : 'Products'
         }
+
         Connected
+
     `;
+
 }
 
 
@@ -1043,7 +1272,6 @@ function updateAIStatus(products) {
 function formatProductName(product) {
 
     if (!product) {
-
         return 'Unknown';
     }
 
@@ -1056,14 +1284,18 @@ function formatProductName(product) {
     if (AI_PRODUCTS[key]) {
 
         return AI_PRODUCTS[key].name;
+
     }
 
 
-    return String(product)
-        .charAt(0)
-        .toUpperCase()
+    return (
+        String(product)
+            .charAt(0)
+            .toUpperCase()
         +
-        String(product).slice(1);
+        String(product).slice(1)
+    );
+
 }
 
 
@@ -1077,8 +1309,9 @@ loadDashboard();
 // ============================================================
 // AUTO REFRESH
 // ============================================================
-
 // Refresh every 5 seconds
+// ============================================================
+
 setInterval(
     loadDashboard,
     5000
