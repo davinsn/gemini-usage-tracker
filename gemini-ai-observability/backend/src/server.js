@@ -6,51 +6,143 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import DatabaseConstructor from 'better-sqlite3';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(
+    fileURLToPath(import.meta.url)
+);
 
 const app = express();
 
-const port = Number(process.env.PORT || 4000);
+const port = Number(
+    process.env.PORT || 4000
+);
 
 // ============================================================
 // DATABASE
 // ============================================================
 
 const dbPath =
-  process.env.DATABASE_PATH ||
-  path.join(__dirname, '..', '..', 'db', 'gemini_observability.sqlite3');
+    process.env.DATABASE_PATH ||
+    path.join(
+        __dirname,
+        '..',
+        '..',
+        'db',
+        'gemini_observability.sqlite3'
+    );
 
 const initSqlPath =
-  path.join(__dirname, '..', '..', 'db', 'init.sql');
+    path.join(
+        __dirname,
+        '..',
+        '..',
+        'db',
+        'init.sql'
+    );
 
-// Make sure the database directory exists
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+// Make sure the DB directory exists
+fs.mkdirSync(
+    path.dirname(dbPath),
+    { recursive: true }
+);
 
+console.log('=================================');
+console.log('[ai-obs] DATABASE PATH:');
+console.log(dbPath);
+console.log('[ai-obs] INIT SQL PATH:');
+console.log(initSqlPath);
+console.log('=================================');
+
+// Open SQLite database
 const db = new DatabaseConstructor(dbPath);
 
+// Enable WAL
 db.pragma('journal_mode = WAL');
 
-// Initialize database
-db.exec(fs.readFileSync(initSqlPath, 'utf8'));
+// ------------------------------------------------------------
+// CREATE TABLES
+// ------------------------------------------------------------
 
-console.log(`[gemini-obs] SQLite database: ${dbPath}`);
+if (!fs.existsSync(initSqlPath)) {
+    throw new Error(
+        `[ai-obs] init.sql not found at: ${initSqlPath}`
+    );
+}
+
+const initSql = fs.readFileSync(
+    initSqlPath,
+    'utf8'
+);
+
+if (!initSql.trim()) {
+    throw new Error(
+        '[ai-obs] init.sql is empty'
+    );
+}
+
+console.log('[ai-obs] Initialising database schema...');
+
+db.exec(initSql);
+
+console.log(
+    '[ai-obs] Database schema initialised'
+);
+
+// ------------------------------------------------------------
+// VERIFY TABLES
+// ------------------------------------------------------------
+
+const tables = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table'
+      AND name NOT LIKE 'sqlite_%'
+    ORDER BY name
+`).all();
+
+console.log(
+    '[ai-obs] DATABASE TABLES:',
+    tables
+);
+
+if (tables.length === 0) {
+    throw new Error(
+        '[ai-obs] No SQLite tables were created. Check db/init.sql'
+    );
+}
+
+console.log(
+    `[ai-obs] SQLite database ready: ${dbPath}`
+);
 
 // ============================================================
 // MIDDLEWARE
 // ============================================================
 
-app.use(cors({ origin: true }));
+app.use(
+    cors({
+        origin: true
+    })
+);
 
-app.use(express.json({ limit: '256kb' }));
+app.use(
+    express.json({
+        limit: '256kb'
+    })
+);
 
 // ============================================================
 // DASHBOARD
 // ============================================================
 
 app.use(
-  express.static(
-    path.join(__dirname, '..', '..', 'dashboard')
-  )
+    express.static(
+        path.join(
+            __dirname,
+            '..',
+            '..',
+            'dashboard'
+        )
+    )
 );
 
 // ============================================================
@@ -58,23 +150,29 @@ app.use(
 // ============================================================
 
 app.get('/', (_req, res) => {
-  try {
-    db.prepare('SELECT 1').get();
+    try {
+        db.prepare(
+            'SELECT 1'
+        ).get();
 
-    res.json({
-      ok: true,
-      service: 'gemini-observability-api',
-      db: 'sqlite'
-    });
+        res.json({
+            ok: true,
+            service: 'ai-observability-api',
+            db: 'sqlite'
+        });
 
-  } catch (error) {
+    } catch (error) {
 
-    res.status(503).json({
-      ok: false,
-      error: 'database_unavailable'
-    });
+        console.error(
+            '[ai-obs] HEALTH ERROR:',
+            error
+        );
 
-  }
+        res.status(503).json({
+            ok: false,
+            error: 'database_unavailable'
+        });
+    }
 });
 
 // ============================================================
@@ -83,11 +181,49 @@ app.get('/', (_req, res) => {
 
 function validEmail(email) {
 
-  return (
-    typeof email === 'string' &&
-    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
-  );
+    return (
+        typeof email === 'string' &&
+        /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
+    );
+}
 
+// ============================================================
+// SUPPORTED AI PRODUCTS
+// ============================================================
+
+const allowedProducts = {
+
+    gemini: {
+        provider: 'google'
+    },
+
+    chatgpt: {
+        provider: 'openai'
+    },
+
+    claude: {
+        provider: 'anthropic'
+    },
+
+    copilot: {
+        provider: 'microsoft'
+    },
+
+    perplexity: {
+        provider: 'perplexity'
+    }
+
+};
+
+function validProduct(product) {
+
+    return (
+        typeof product === 'string' &&
+        Object.prototype.hasOwnProperty.call(
+            allowedProducts,
+            product
+        )
+    );
 }
 
 // ============================================================
@@ -95,64 +231,125 @@ function validEmail(email) {
 // ============================================================
 
 const upsertEmployee = db.prepare(`
-  INSERT INTO employees (
-    email,
-    department,
-    role
-  )
-  VALUES (
-    @email,
-    @department,
-    @role
-  )
-  ON CONFLICT(email) DO UPDATE SET
-    department = COALESCE(@department, department),
-    role = COALESCE(@role, role)
+    INSERT INTO employees (
+        email,
+        department,
+        role
+    )
+    VALUES (
+        @email,
+        @department,
+        @role
+    )
+    ON CONFLICT(email) DO UPDATE SET
+
+        department =
+            COALESCE(
+                @department,
+                department
+            ),
+
+        role =
+            COALESCE(
+                @role,
+                role
+            )
 `);
 
 const getEmployeeId = db.prepare(
-  'SELECT id FROM employees WHERE email = ?'
+    'SELECT id FROM employees WHERE email = ?'
 );
 
+// ============================================================
+// INSERT EVENT
+// ============================================================
+
 const insertEvent = db.prepare(`
-  INSERT OR IGNORE INTO usage_events
-  (
-    employee_id,
-    event_type,
-    session_id,
-    interaction_id,
-    model,
-    occurred_at,
-    latency_ms,
-    prompt_length,
-    response_length,
-    metadata
-  )
-  VALUES
-  (
-    @employee_id,
-    @event_type,
-    @session_id,
-    @interaction_id,
-    @model,
-    @occurred_at,
-    @latency_ms,
-    @prompt_length,
-    @response_length,
-    @metadata
-  )
+    INSERT OR IGNORE INTO usage_events
+    (
+        employee_id,
+        provider,
+        product,
+        event_type,
+        session_id,
+        interaction_id,
+        model,
+        occurred_at,
+        latency_ms,
+        prompt_length,
+        response_length,
+        prompt_tokens,
+        response_tokens,
+        total_tokens,
+        metadata
+    )
+    VALUES
+    (
+        @employee_id,
+        @provider,
+        @product,
+        @event_type,
+        @session_id,
+        @interaction_id,
+        @model,
+        @occurred_at,
+        @latency_ms,
+        @prompt_length,
+        @response_length,
+        @prompt_tokens,
+        @response_tokens,
+        @total_tokens,
+        @metadata
+    )
 `);
 
+// ============================================================
+// COMPLETE EVENT
+// ============================================================
+
 const completeEvent = db.prepare(`
-  UPDATE usage_events
-  SET
-    latency_ms = @latency_ms,
-    prompt_length = @prompt_length,
-    response_length = @response_length,
-    model = @model,
-    metadata = @metadata
-  WHERE employee_id = @employee_id
-    AND interaction_id = @interaction_id
+    UPDATE usage_events
+
+    SET
+
+        provider =
+            @provider,
+
+        product =
+            @product,
+
+        latency_ms =
+            @latency_ms,
+
+        prompt_length =
+            @prompt_length,
+
+        response_length =
+            @response_length,
+
+        prompt_tokens =
+            @prompt_tokens,
+
+        response_tokens =
+            @response_tokens,
+
+        total_tokens =
+            @total_tokens,
+
+        model =
+            @model,
+
+        metadata =
+            @metadata
+
+    WHERE employee_id =
+        @employee_id
+
+      AND interaction_id =
+        @interaction_id
+
+      AND product =
+        @product
 `);
 
 // ============================================================
@@ -160,46 +357,55 @@ const completeEvent = db.prepare(`
 // ============================================================
 
 const dummyEmployees = [
-  {
-    email: 'ali@company.com',
-    department: 'Engineering',
-    role: 'Software Engineer'
-  },
-  {
-    email: 'davin@company.com',
-    department: 'Engineering',
-    role: 'Software Engineer'
-  },
-  {
-    email: 'sarah@company.com',
-    department: 'Marketing',
-    role: 'Marketing Executive'
-  },
-  {
-    email: 'jason@company.com',
-    department: 'Finance',
-    role: 'Financial Analyst'
-  },
-  {
-    email: 'mei@company.com',
-    department: 'Human Resources',
-    role: 'HR Executive'
-  },
-  {
-    email: 'daniel@company.com',
-    department: 'Engineering',
-    role: 'Backend Developer'
-  },
-  {
-    email: 'farah@company.com',
-    department: 'Operations',
-    role: 'Operations Executive'
-  },
-  {
-    email: 'ryan@company.com',
-    department: 'Sales',
-    role: 'Sales Executive'
-  }
+
+    {
+        email: 'ali@company.com',
+        department: 'Engineering',
+        role: 'Software Engineer'
+    },
+
+    {
+        email: 'davin@company.com',
+        department: 'Engineering',
+        role: 'Software Engineer'
+    },
+
+    {
+        email: 'sarah@company.com',
+        department: 'Marketing',
+        role: 'Marketing Executive'
+    },
+
+    {
+        email: 'jason@company.com',
+        department: 'Finance',
+        role: 'Financial Analyst'
+    },
+
+    {
+        email: 'mei@company.com',
+        department: 'Human Resources',
+        role: 'HR Executive'
+    },
+
+    {
+        email: 'daniel@company.com',
+        department: 'Engineering',
+        role: 'Backend Developer'
+    },
+
+    {
+        email: 'farah@company.com',
+        department: 'Operations',
+        role: 'Operations Executive'
+    },
+
+    {
+        email: 'ryan@company.com',
+        department: 'Sales',
+        role: 'Sales Executive'
+    }
+
 ];
 
 // ============================================================
@@ -208,517 +414,927 @@ const dummyEmployees = [
 
 const seedEmployees = db.transaction(() => {
 
-  for (const employee of dummyEmployees) {
+    for (const employee of dummyEmployees) {
 
-    upsertEmployee.run({
-      email: employee.email,
-      department: employee.department,
-      role: employee.role
-    });
+        upsertEmployee.run({
 
-  }
+            email:
+                employee.email,
+
+            department:
+                employee.department,
+
+            role:
+                employee.role
+        });
+    }
 
 });
 
 seedEmployees();
 
 console.log(
-  `[gemini-obs] Loaded ${dummyEmployees.length} dummy employees`
+    `[ai-obs] Loaded ${dummyEmployees.length} dummy employees`
 );
 
 // ============================================================
-// SEED DUMMY USAGE
+// DUMMY AI USAGE PROFILES
+// ============================================================
+
+const usageProfiles = {
+
+    'ali@company.com': {
+
+        gemini: {
+            sessions: 24,
+            interactions: 183
+        },
+
+        chatgpt: {
+            sessions: 17,
+            interactions: 121
+        },
+
+        claude: {
+            sessions: 9,
+            interactions: 63
+        }
+    },
+
+    'davin@company.com': {
+
+        gemini: {
+            sessions: 31,
+            interactions: 247
+        },
+
+        chatgpt: {
+            sessions: 24,
+            interactions: 183
+        },
+
+        claude: {
+            sessions: 14,
+            interactions: 96
+        },
+
+        copilot: {
+            sessions: 8,
+            interactions: 52
+        }
+    },
+
+    'sarah@company.com': {
+
+        gemini: {
+            sessions: 18,
+            interactions: 96
+        },
+
+        chatgpt: {
+            sessions: 13,
+            interactions: 74
+        },
+
+        claude: {
+            sessions: 11,
+            interactions: 61
+        }
+    },
+
+    'jason@company.com': {
+
+        gemini: {
+            sessions: 12,
+            interactions: 64
+        },
+
+        chatgpt: {
+            sessions: 9,
+            interactions: 47
+        }
+    },
+
+    'mei@company.com': {
+
+        gemini: {
+            sessions: 21,
+            interactions: 119
+        },
+
+        claude: {
+            sessions: 15,
+            interactions: 88
+        },
+
+        chatgpt: {
+            sessions: 10,
+            interactions: 57
+        }
+    },
+
+    'daniel@company.com': {
+
+        gemini: {
+            sessions: 27,
+            interactions: 156
+        },
+
+        chatgpt: {
+            sessions: 19,
+            interactions: 113
+        },
+
+        claude: {
+            sessions: 12,
+            interactions: 71
+        },
+
+        copilot: {
+            sessions: 16,
+            interactions: 89
+        },
+
+        perplexity: {
+            sessions: 7,
+            interactions: 34
+        }
+    },
+
+    'farah@company.com': {
+
+        gemini: {
+            sessions: 15,
+            interactions: 83
+        },
+
+        chatgpt: {
+            sessions: 11,
+            interactions: 61
+        },
+
+        perplexity: {
+            sessions: 6,
+            interactions: 28
+        }
+    },
+
+    'ryan@company.com': {
+
+        gemini: {
+            sessions: 19,
+            interactions: 102
+        },
+
+        chatgpt: {
+            sessions: 14,
+            interactions: 76
+        },
+
+        claude: {
+            sessions: 8,
+            interactions: 41
+        }
+    }
+
+};
+
+// ============================================================
+// SEED DUMMY MULTI-AI USAGE
 // ============================================================
 
 function seedDummyUsage() {
 
-  // Check whether usage already exists.
-  // This prevents the data from doubling every time
-  // the Node.js server restarts.
+    const existing = db
+        .prepare(`
+            SELECT COUNT(*) AS count
+            FROM usage_events
+            WHERE metadata LIKE '%dummy_seed%'
+        `)
+        .get();
 
-  const existing = db
-    .prepare('SELECT COUNT(*) AS count FROM usage_events')
-    .get();
+    if (existing.count > 0) {
+        console.log(
+            `[ai-obs] Dummy usage already exists: ${existing.count} rows`
+        );
 
-  if (existing.count > 0) {
+        return;
+    }
 
     console.log(
-      '[gemini-obs] Existing usage data detected - skipping dummy usage seed'
+        '[ai-obs] Creating dummy multi-AI usage data...'
     );
 
-    return;
-  }
+    const seedUsage = db.transaction(() => {
 
-  console.log(
-    '[gemini-obs] Creating dummy Gemini usage data...'
-  );
+        for (const employee of dummyEmployees) {
 
-  const usageProfiles = {
+            const employeeRow =
+                getEmployeeId.get(
+                    employee.email
+                );
 
-    'ali@company.com': {
-      sessions: 24,
-      interactions: 183
-    },
+            if (!employeeRow) {
+                throw new Error(
+                    `Employee not found: ${employee.email}`
+                );
+            }
 
-    'davin@company.com': {
-      sessions: 31,
-      interactions: 247
-    },
+            const employeeId =
+                employeeRow.id;
 
-    'sarah@company.com': {
-      sessions: 18,
-      interactions: 96
-    },
+            const employeeProfiles =
+                usageProfiles[
+                    employee.email
+                ];
 
-    'jason@company.com': {
-      sessions: 12,
-      interactions: 64
-    },
+            if (!employeeProfiles) {
+                continue;
+            }
 
-    'mei@company.com': {
-      sessions: 21,
-      interactions: 119
-    },
+            for (
+                const [product, profile]
+                of Object.entries(employeeProfiles)
+            ) {
 
-    'daniel@company.com': {
-      sessions: 27,
-      interactions: 156
-    },
+                const productConfig =
+                    allowedProducts[product];
 
-    'farah@company.com': {
-      sessions: 15,
-      interactions: 83
-    },
+                if (!productConfig) {
+                    console.warn(
+                        `[ai-obs] Unknown product: ${product}`
+                    );
 
-    'ryan@company.com': {
-      sessions: 19,
-      interactions: 102
+                    continue;
+                }
+
+                const provider =
+                    productConfig.provider;
+
+                let interactionsRemaining =
+                    profile.interactions;
+
+                for (
+                    let sessionNumber = 1;
+                    sessionNumber <= profile.sessions;
+                    sessionNumber++
+                ) {
+
+                    if (
+                        interactionsRemaining <= 0
+                    ) {
+                        break;
+                    }
+
+                    const remainingSessions =
+                        profile.sessions -
+                        sessionNumber +
+                        1;
+
+                    let interactionsThisSession =
+                        Math.ceil(
+                            interactionsRemaining /
+                            remainingSessions
+                        );
+
+                    if (
+                        sessionNumber % 3 === 0
+                    ) {
+                        interactionsThisSession += 1;
+                    }
+
+                    interactionsThisSession =
+                        Math.min(
+                            interactionsThisSession,
+                            interactionsRemaining
+                        );
+
+                    const sessionId =
+                        `dummy-${product}-${employee.email}-${sessionNumber}`;
+
+                    for (
+                        let interactionNumber = 1;
+                        interactionNumber <=
+                        interactionsThisSession;
+                        interactionNumber++
+                    ) {
+
+                        const interactionId =
+                            `dummy-${product}-${employee.email}-${sessionNumber}-${interactionNumber}`;
+
+                        const latency =
+                            Math.floor(
+                                500 +
+                                Math.random() * 900
+                            );
+
+                        const promptLength =
+                            Math.floor(
+                                40 +
+                                Math.random() * 600
+                            );
+
+                        const responseLength =
+                            Math.floor(
+                                100 +
+                                Math.random() * 1800
+                            );
+
+                        const promptTokens =
+                            Math.floor(
+                                promptLength / 4
+                            );
+
+                        const responseTokens =
+                            Math.floor(
+                                responseLength / 4
+                            );
+
+                        const totalTokens =
+                            promptTokens +
+                            responseTokens;
+
+                        const daysAgo =
+                            Math.floor(
+                                Math.random() * 30
+                            );
+
+                        const hoursAgo =
+                            Math.floor(
+                                Math.random() * 24
+                            );
+
+                        const occurredAt =
+                            new Date(
+                                Date.now()
+                                -
+                                daysAgo *
+                                24 *
+                                60 *
+                                60 *
+                                1000
+                                -
+                                hoursAgo *
+                                60 *
+                                60 *
+                                1000
+                            ).toISOString();
+
+                        const modelMap = {
+                            gemini:
+                                'gemini-2.5-flash',
+
+                            chatgpt:
+                                'gpt-5',
+
+                            claude:
+                                'claude-sonnet',
+
+                            copilot:
+                                'copilot',
+
+                            perplexity:
+                                'sonar'
+                        };
+
+                        const model =
+                            modelMap[product];
+
+                        const metadata =
+                            JSON.stringify({
+                                source:
+                                    'dummy_seed',
+
+                                provider,
+
+                                product,
+
+                                account_type:
+                                    'company',
+
+                                browser:
+                                    'Chrome',
+
+                                generated:
+                                    true
+                            });
+
+                        // ------------------------------------------------
+                        // INSERT INTERACTION
+                        // ------------------------------------------------
+
+                        insertEvent.run({
+
+                            employee_id:
+                                employeeId,
+
+                            provider,
+
+                            product,
+
+                            event_type:
+                                'interaction_started',
+
+                            session_id:
+                                sessionId,
+
+                            interaction_id:
+                                interactionId,
+
+                            model,
+
+                            occurred_at:
+                                occurredAt,
+
+                            latency_ms:
+                                null,
+
+                            prompt_length:
+                                null,
+
+                            response_length:
+                                null,
+
+                            prompt_tokens:
+                                null,
+
+                            response_tokens:
+                                null,
+
+                            total_tokens:
+                                null,
+
+                            metadata
+                        });
+
+                        // ------------------------------------------------
+                        // COMPLETE INTERACTION
+                        // ------------------------------------------------
+
+                        completeEvent.run({
+
+                            employee_id:
+                                employeeId,
+
+                            provider,
+
+                            product,
+
+                            interaction_id:
+                                interactionId,
+
+                            latency_ms:
+                                latency,
+
+                            prompt_length:
+                                promptLength,
+
+                            response_length:
+                                responseLength,
+
+                            prompt_tokens:
+                                promptTokens,
+
+                            response_tokens:
+                                responseTokens,
+
+                            total_tokens:
+                                totalTokens,
+
+                            model,
+
+                            metadata
+                        });
+                    }
+
+                    interactionsRemaining -=
+                        interactionsThisSession;
+                }
+            }
+        }
+    });
+
+    // Actually execute transaction
+    seedUsage();
+
+    // ------------------------------------------------------------
+    // VERIFY INSERTION
+    // ------------------------------------------------------------
+
+    const usageCount =
+        db.prepare(`
+            SELECT COUNT(*) AS count
+            FROM usage_events
+        `).get();
+
+    const employeeCount =
+        db.prepare(`
+            SELECT COUNT(*) AS count
+            FROM employees
+        `).get();
+
+    console.log(
+        `[ai-obs] Employees in DB: ${employeeCount.count}`
+    );
+
+    console.log(
+        `[ai-obs] Usage events in DB: ${usageCount.count}`
+    );
+
+    if (usageCount.count === 0) {
+        throw new Error(
+            '[ai-obs] Dummy usage seeding completed but usage_events is empty'
+        );
     }
 
-  };
-
-  const seedUsage = db.transaction(() => {
-
-    for (const employee of dummyEmployees) {
-
-      const employeeId =
-        getEmployeeId.get(employee.email).id;
-
-      const profile =
-        usageProfiles[employee.email];
-
-      let interactionsRemaining =
-        profile.interactions;
-
-      for (
-        let sessionNumber = 1;
-        sessionNumber <= profile.sessions;
-        sessionNumber++
-      ) {
-
-        if (interactionsRemaining <= 0) {
-          break;
-        }
-
-        // Spread interactions across sessions
-        const remainingSessions =
-          profile.sessions - sessionNumber + 1;
-
-        let interactionsThisSession =
-          Math.ceil(
-            interactionsRemaining /
-            remainingSessions
-          );
-
-        // Add some variation
-        if (sessionNumber % 3 === 0) {
-          interactionsThisSession += 1;
-        }
-
-        interactionsThisSession =
-          Math.min(
-            interactionsThisSession,
-            interactionsRemaining
-          );
-
-        const sessionId =
-          `dummy-${employee.email}-${sessionNumber}`;
-
-        for (
-          let interactionNumber = 1;
-          interactionNumber <= interactionsThisSession;
-          interactionNumber++
-        ) {
-
-          const interactionId =
-            `dummy-${employee.email}-${sessionNumber}-${interactionNumber}`;
-
-          // Random latency between 500ms and 1300ms
-          const latency =
-            Math.floor(
-              500 + Math.random() * 800
-            );
-
-          const promptLength =
-            Math.floor(
-              40 + Math.random() * 500
-            );
-
-          const responseLength =
-            Math.floor(
-              100 + Math.random() * 1500
-            );
-
-          // Spread data across the last 30 days
-          const daysAgo =
-            Math.floor(
-              Math.random() * 30
-            );
-
-          const hoursAgo =
-            Math.floor(
-              Math.random() * 24
-            );
-
-          const occurredAt =
-            new Date(
-              Date.now()
-              - daysAgo * 24 * 60 * 60 * 1000
-              - hoursAgo * 60 * 60 * 1000
-            ).toISOString();
-
-          const metadata = JSON.stringify({
-            source: 'dummy_seed',
-            provider: 'gemini',
-            account_type: 'company',
-            browser: 'Chrome',
-            generated: true
-          });
-
-          // --------------------------------------------------
-          // INTERACTION STARTED
-          // --------------------------------------------------
-
-          insertEvent.run({
-
-            employee_id: employeeId,
-
-            event_type: 'interaction_started',
-
-            session_id: sessionId,
-
-            interaction_id: interactionId,
-
-            model: 'gemini',
-
-            occurred_at: occurredAt,
-
-            latency_ms: null,
-
-            prompt_length: null,
-
-            response_length: null,
-
-            metadata
-
-          });
-
-          // --------------------------------------------------
-          // INTERACTION COMPLETED
-          // --------------------------------------------------
-
-          completeEvent.run({
-
-            employee_id: employeeId,
-
-            interaction_id: interactionId,
-
-            latency_ms: latency,
-
-            prompt_length: promptLength,
-
-            response_length: responseLength,
-
-            model: 'gemini',
-
-            metadata
-
-          });
-
-        }
-
-        interactionsRemaining -=
-          interactionsThisSession;
-
-      }
-
-    }
-
-  });
-
-  seedUsage();
-
-  console.log(
-    '[gemini-obs] Dummy Gemini usage created'
-  );
-
+    console.log(
+        '[ai-obs] Dummy multi-AI usage created successfully'
+    );
 }
 
 seedDummyUsage();
+
+
+// ============================================================
+// DATABASE DEBUG
+// ============================================================
+
+console.log('=================================');
+console.log('[ai-obs] DATABASE VERIFICATION');
+console.log('=================================');
+
+const employeeCount =
+    db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM employees
+    `).get();
+
+const usageCount =
+    db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM usage_events
+    `).get();
+
+console.log(
+    '[ai-obs] Employees:',
+    employeeCount.count
+);
+
+console.log(
+    '[ai-obs] Usage events:',
+    usageCount.count
+);
+
+console.log(
+    '[ai-obs] Sample usage:',
+    db.prepare(`
+        SELECT
+            id,
+            employee_id,
+            provider,
+            product,
+            event_type,
+            session_id,
+            interaction_id,
+            total_tokens
+        FROM usage_events
+        LIMIT 5
+    `).all()
+);
+
+console.log('=================================');
 
 // ============================================================
 // EVENT INGESTION
 // ============================================================
 
-app.post('/api/usage/events', (req, res) => {
+app.post(
+    '/api/usage/events',
+    (req, res) => {
 
-  const body = req.body || {};
+        const body =
+            req.body || {};
 
-  const {
-    email,
-    department,
-    role,
-    event_type,
-    session_id,
-    interaction_id,
-    model,
-    occurred_at,
-    latency_ms,
-    prompt_length,
-    response_length,
-    metadata
-  } = body;
+        const {
 
-  if (
-    !validEmail(email) ||
-    typeof event_type !== 'string' ||
-    !occurred_at
-  ) {
+            email,
+            department,
+            role,
+            provider,
+            product,
+            event_type,
+            session_id,
+            interaction_id,
+            model,
+            occurred_at,
+            latency_ms,
+            prompt_length,
+            response_length,
+            prompt_tokens,
+            response_tokens,
+            total_tokens,
+            metadata
 
-    return res.status(400).json({
-      error:
-        'email, event_type and occurred_at are required'
-    });
+        } = body;
 
-  }
+        // VALIDATION
 
-  try {
+        if (
+            !validEmail(email) ||
+            !validProduct(product) ||
+            typeof event_type !== 'string' ||
+            !occurred_at
+        ) {
 
-    const insertAll = db.transaction(() => {
+            return res.status(400).json({
 
-      // ------------------------------------------------------
-      // CREATE / UPDATE EMPLOYEE
-      // ------------------------------------------------------
+                error:
+                    'email, product, event_type and occurred_at are required'
 
-      upsertEmployee.run({
+            });
+        }
 
-        email,
+        const expectedProvider =
+            allowedProducts[
+                product
+            ].provider;
 
-        department:
-          department ?? null,
+        if (
+            provider &&
+            provider !== expectedProvider
+        ) {
 
-        role:
-          role ?? null
+            return res.status(400).json({
 
-      });
+                error:
+                    'provider does not match product'
 
-      const employeeId =
-        getEmployeeId.get(email).id;
+            });
+        }
 
-      const interactionId =
-        interaction_id ||
-        crypto.randomUUID();
+        try {
 
-      const metadataJson =
-        JSON.stringify(
-          metadata ?? {}
-        );
+            const insertAll =
+                db.transaction(() => {
 
-      // ------------------------------------------------------
-      // INTERACTION COMPLETED
-      // ------------------------------------------------------
+                    // EMPLOYEE
 
-      if (
-        event_type ===
-        'interaction_completed'
-      ) {
+                    upsertEmployee.run({
 
-        const result =
-          completeEvent.run({
+                        email,
 
-            employee_id:
-              employeeId,
+                        department:
+                            department ?? null,
 
-            interaction_id:
-              interactionId,
+                        role:
+                            role ?? null
 
-            latency_ms:
-              latency_ms ?? null,
+                    });
 
-            prompt_length:
-              prompt_length ?? null,
+                    const employeeId =
+                        getEmployeeId
+                            .get(email)
+                            .id;
 
-            response_length:
-              response_length ?? null,
+                    const interactionId =
+                        interaction_id ||
+                        crypto.randomUUID();
 
-            model:
-              model ?? null,
+                    const metadataJson =
+                        JSON.stringify(
+                            metadata ?? {}
+                        );
 
-            metadata:
-              metadataJson
+                    const finalProvider =
+                        expectedProvider;
 
-          });
+                    // COMPLETED EVENT
 
-        return {
+                    if (
+                        event_type ===
+                        'interaction_completed'
+                    ) {
 
-          inserted:
-            result.changes === 1,
+                        const result =
+                            completeEvent.run({
 
-          event_id:
-            null
+                                employee_id:
+                                    employeeId,
 
-        };
+                                provider:
+                                    finalProvider,
 
-      }
+                                product,
 
-      // ------------------------------------------------------
-      // NEW EVENT
-      // ------------------------------------------------------
+                                interaction_id:
+                                    interactionId,
 
-      const result =
-        insertEvent.run({
+                                latency_ms:
+                                    latency_ms ??
+                                    null,
 
-          employee_id:
-            employeeId,
+                                prompt_length:
+                                    prompt_length ??
+                                    null,
 
-          event_type,
+                                response_length:
+                                    response_length ??
+                                    null,
 
-          session_id:
-            session_id ?? null,
+                                prompt_tokens:
+                                    prompt_tokens ??
+                                    null,
 
-          interaction_id:
-            interactionId,
+                                response_tokens:
+                                    response_tokens ??
+                                    null,
 
-          model:
-            model ?? null,
+                                total_tokens:
+                                    total_tokens ??
+                                    null,
 
-          occurred_at,
+                                model:
+                                    model ??
+                                    null,
 
-          latency_ms:
-            latency_ms ?? null,
+                                metadata:
+                                    metadataJson
 
-          prompt_length:
-            prompt_length ?? null,
+                            });
 
-          response_length:
-            response_length ?? null,
+                        return {
 
-          metadata:
-            metadataJson
+                            inserted:
+                                result.changes === 1,
 
-        });
+                            event_id:
+                                null
 
-      return {
+                        };
+                    }
 
-        inserted:
-          result.changes === 1,
+                    // NEW EVENT
 
-        event_id:
-          result.lastInsertRowid
+                    const result =
+                        insertEvent.run({
 
-      };
+                            employee_id:
+                                employeeId,
 
-    });
+                            provider:
+                                finalProvider,
 
-    const {
-      inserted,
-      event_id
-    } = insertAll();
+                            product,
 
-    res.status(201).json({
+                            event_type,
 
-      accepted: true,
+                            session_id:
+                                session_id ??
+                                null,
 
-      inserted,
+                            interaction_id:
+                                interactionId,
 
-      event_id:
-        inserted
-          ? event_id
-          : null
+                            model:
+                                model ??
+                                null,
 
-    });
+                            occurred_at,
 
-  } catch (error) {
+                            latency_ms:
+                                latency_ms ??
+                                null,
 
-    console.error(
-      '[gemini-obs] EVENT INGESTION ERROR:',
-      error
-    );
+                            prompt_length:
+                                prompt_length ??
+                                null,
 
-    res.status(500).json({
-      error: 'event_ingestion_failed'
-    });
+                            response_length:
+                                response_length ??
+                                null,
 
-  }
+                            prompt_tokens:
+                                prompt_tokens ??
+                                null,
 
-});
+                            response_tokens:
+                                response_tokens ??
+                                null,
+
+                            total_tokens:
+                                total_tokens ??
+                                null,
+
+                            metadata:
+                                metadataJson
+                        });
+
+                    return {
+
+                        inserted:
+                            result.changes === 1,
+
+                        event_id:
+                            result.lastInsertRowid
+
+                    };
+                });
+
+            const {
+                inserted,
+                event_id
+            } = insertAll();
+
+            res.status(201).json({
+
+                accepted:
+                    true,
+
+                inserted,
+
+                event_id:
+                    inserted
+                        ? event_id
+                        : null
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EVENT INGESTION ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'event_ingestion_failed'
+
+            });
+        }
+    }
+);
 
 // ============================================================
 // OVERALL USAGE SUMMARY
 // ============================================================
 
 app.get(
-  '/api/usage/summary',
-  (_req, res) => {
+    '/api/usage/summary',
+    (_req, res) => {
 
-    try {
+        try {
 
-      const row =
-        db.prepare(`
-          SELECT
+            const row = db.prepare(`
+                          SELECT
 
-            COUNT(*) FILTER (
-              WHERE event_type =
-              'interaction_started'
-            ) AS interactions,
+                              COUNT(DISTINCT interaction_id)
+                              FILTER (
+                                  WHERE interaction_id IS NOT NULL
+                              ) AS interactions,
 
-            COUNT(DISTINCT employee_id)
-              FILTER (
-                WHERE event_type =
-                'interaction_started'
-              ) AS active_employees,
+                              COUNT(DISTINCT employee_id)
+                              FILTER (
+                                  WHERE interaction_id IS NOT NULL
+                              ) AS active_employees,
 
-            COUNT(DISTINCT session_id)
-              FILTER (
-                WHERE session_id IS NOT NULL
-              ) AS sessions,
+                              COUNT(DISTINCT session_id)
+                              FILTER (
+                                  WHERE session_id IS NOT NULL
+                              ) AS sessions,
 
-            ROUND(
-              AVG(latency_ms)
-              FILTER (
-                WHERE latency_ms IS NOT NULL
-              )
-            ) AS avg_latency_ms
+                              ROUND(
+                                  AVG(latency_ms)
+                                  FILTER (
+                                      WHERE latency_ms IS NOT NULL
+                                  )
+                              ) AS avg_latency_ms,
 
-          FROM usage_events
-        `).get();
+                              COALESCE(
+                                  SUM(total_tokens),
+                                  0
+                              ) AS total_tokens
 
-      res.json(row);
+                          FROM usage_events
+                      `).get();
 
-    } catch (error) {
+            res.json(row);
 
-      console.error(
-        '[gemini-obs] SUMMARY ERROR:',
-        error
-      );
+        } catch (error) {
 
-      res.status(500).json({
-        error: 'summary_failed'
-      });
+            console.error(
+                '[ai-obs] SUMMARY ERROR:',
+                error
+            );
 
+            res.status(500).json({
+
+                error:
+                    'summary_failed'
+
+            });
+        }
     }
-
-  }
 );
 
 // ============================================================
@@ -726,76 +1342,561 @@ app.get(
 // ============================================================
 
 app.get(
-  '/api/usage/by-employee',
-  (_req, res) => {
+    '/api/usage/by-employee',
+    (_req, res) => {
 
-    try {
+        try {
 
-      const rows =
-        db.prepare(`
-          SELECT
+            const rows =
+                db.prepare(`
 
-            e.email,
+                    SELECT
 
-            e.department,
+                        e.email,
 
-            COUNT(u.id) FILTER (
-              WHERE u.event_type =
-              'interaction_started'
-            ) AS interactions,
+                        e.department,
 
-            COUNT(DISTINCT u.session_id)
-              FILTER (
-                WHERE u.session_id IS NOT NULL
-              ) AS sessions,
+                        e.role,
 
-            ROUND(
-              AVG(u.latency_ms)
-              FILTER (
-                WHERE u.latency_ms IS NOT NULL
-              )
-            ) AS avg_latency_ms
+                        COUNT(*)
+                        FILTER (
+                            WHERE u.event_type =
+                            'interaction_started'
+                        ) AS interactions,
 
-          FROM employees e
+                        COUNT(
+                            DISTINCT u.session_id
+                        )
+                        FILTER (
+                            WHERE u.session_id
+                            IS NOT NULL
+                        ) AS sessions,
 
-          LEFT JOIN usage_events u
-            ON u.employee_id = e.id
+                        ROUND(
+                            AVG(u.latency_ms)
+                            FILTER (
+                                WHERE u.latency_ms
+                                IS NOT NULL
+                            )
+                        ) AS avg_latency_ms,
 
-          GROUP BY
-            e.id,
-            e.email,
-            e.department
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN u.event_type =
+                                    'interaction_completed'
+                                    THEN u.total_tokens
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ) AS total_tokens
 
-          ORDER BY
-            interactions DESC
-        `).all();
+                    FROM employees e
 
-      res.json(rows);
+                    LEFT JOIN usage_events u
+                        ON u.employee_id =
+                           e.id
 
-    } catch (error) {
+                    GROUP BY
 
-      console.error(
-        '[gemini-obs] EMPLOYEE SUMMARY ERROR:',
-        error
-      );
+                        e.id,
+                        e.email,
+                        e.department,
+                        e.role
 
-      res.status(500).json({
-        error: 'employee_summary_failed'
-      });
+                    ORDER BY
+                        interactions DESC
+
+                `).all();
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EMPLOYEE SUMMARY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'employee_summary_failed'
+
+            });
+        }
+    }
+);
+
+// ============================================================
+// USAGE BY PROVIDER
+// ============================================================
+
+app.get(
+    '/api/usage/by-provider',
+    (_req, res) => {
+
+        try {
+
+            const rows =
+                db.prepare(`
+
+                    SELECT
+
+                        provider,
+
+                        COUNT(*) FILTER (
+                            WHERE event_type =
+                            'interaction_started'
+                        ) AS interactions,
+
+                        COUNT(
+                            DISTINCT session_id
+                        ) AS sessions,
+
+                        COUNT(
+                            DISTINCT employee_id
+                        ) AS employees,
+
+                        ROUND(
+                            AVG(latency_ms)
+                            FILTER (
+                                WHERE latency_ms
+                                IS NOT NULL
+                            )
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN event_type =
+                                    'interaction_completed'
+                                    THEN total_tokens
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ) AS total_tokens
+
+                    FROM usage_events
+
+                    GROUP BY provider
+
+                    ORDER BY
+                        interactions DESC
+
+                `).all();
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] PROVIDER SUMMARY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'provider_summary_failed'
+
+            });
+        }
+    }
+);
+
+// ============================================================
+// USAGE BY PRODUCT
+// ============================================================
+
+app.get(
+    '/api/usage/by-product',
+    (_req, res) => {
+
+        try {
+
+            const rows = db.prepare(`
+                SELECT
+
+                    provider,
+
+                    product,
+
+                    COUNT(*) FILTER (
+                        WHERE event_type =
+                        'interaction_started'
+                    ) AS interactions,
+
+                    COUNT(
+                        DISTINCT session_id
+                    ) AS sessions,
+
+                    COUNT(
+                        DISTINCT employee_id
+                    ) AS employees,
+
+                    ROUND(
+                        AVG(latency_ms)
+                        FILTER (
+                            WHERE latency_ms IS NOT NULL
+                        )
+                    ) AS avg_latency_ms,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN event_type =
+                                'interaction_completed'
+                                THEN total_tokens
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS total_tokens
+
+                FROM usage_events
+
+                GROUP BY
+                    provider,
+                    product
+
+                ORDER BY
+                    interactions DESC
+            `).all();
+
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] PRODUCT SUMMARY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    'product_summary_failed'
+            });
+
+        }
 
     }
+);
 
-  }
+
+
+
+// ============================================================
+// MULTI-AI DASHBOARD SUMMARY
+// ============================================================
+
+app.get(
+    '/api/usage/multi-ai',
+    (_req, res) => {
+
+        try {
+
+            const products = db.prepare(`
+                SELECT
+
+                    product,
+
+                    provider,
+
+                    COUNT(*) FILTER (
+                        WHERE event_type =
+                        'interaction_started'
+                    ) AS interactions,
+
+                    COUNT(
+                        DISTINCT session_id
+                    ) AS sessions,
+
+                    COUNT(
+                        DISTINCT employee_id
+                    ) AS employees,
+
+                    ROUND(
+                        AVG(latency_ms)
+                        FILTER (
+                            WHERE latency_ms IS NOT NULL
+                        )
+                    ) AS avg_latency_ms,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN event_type =
+                                'interaction_completed'
+                                THEN total_tokens
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS total_tokens
+
+                FROM usage_events
+
+                GROUP BY
+                    product,
+                    provider
+
+                ORDER BY
+                    interactions DESC
+            `).all();
+
+
+            const employees = db.prepare(`
+                SELECT
+
+                    e.email,
+
+                    e.department,
+
+                    e.role,
+
+                    u.product,
+
+                    u.provider,
+
+                    COUNT(*) FILTER (
+                        WHERE u.event_type =
+                        'interaction_started'
+                    ) AS interactions,
+
+                    COUNT(
+                        DISTINCT u.session_id
+                    ) AS sessions,
+
+                    ROUND(
+                        AVG(u.latency_ms)
+                        FILTER (
+                            WHERE u.latency_ms IS NOT NULL
+                        )
+                    ) AS avg_latency_ms,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN u.event_type =
+                                'interaction_completed'
+                                THEN u.total_tokens
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS total_tokens
+
+                FROM employees e
+
+                LEFT JOIN usage_events u
+                    ON u.employee_id = e.id
+
+                GROUP BY
+
+                    e.id,
+                    e.email,
+                    e.department,
+                    e.role,
+                    u.product,
+                    u.provider
+
+                ORDER BY
+                    e.email,
+                    interactions DESC
+            `).all();
+
+
+            res.json({
+                products,
+                employees
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] MULTI-AI ERROR:',
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    'multi_ai_summary_failed'
+            });
+
+        }
+
+    }
+);
+
+// ============================================================
+// USAGE BY EMPLOYEE + PRODUCT
+// ============================================================
+
+app.get(
+    '/api/usage/by-employee-product',
+    (_req, res) => {
+
+        try {
+
+            const rows =
+                db.prepare(`
+
+                    SELECT
+
+                        e.email,
+
+                        e.department,
+
+                        e.role,
+
+                        u.provider,
+
+                        u.product,
+
+                        COUNT(*) FILTER (
+                            WHERE u.event_type =
+                            'interaction_started'
+                        ) AS interactions,
+
+                        COUNT(
+                            DISTINCT u.session_id
+                        ) AS sessions,
+
+                        ROUND(
+                            AVG(u.latency_ms)
+                            FILTER (
+                                WHERE u.latency_ms
+                                IS NOT NULL
+                            )
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(
+                                CASE
+                                    WHEN u.event_type =
+                                    'interaction_completed'
+                                    THEN u.total_tokens
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ) AS total_tokens
+
+                    FROM employees e
+
+                    JOIN usage_events u
+                        ON u.employee_id =
+                           e.id
+
+                    GROUP BY
+
+                        e.id,
+                        e.email,
+                        e.department,
+                        e.role,
+                        u.provider,
+                        u.product
+
+                    ORDER BY
+
+                        e.email,
+
+                        interactions DESC
+
+                `).all();
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EMPLOYEE PRODUCT ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'employee_product_summary_failed'
+
+            });
+        }
+    }
+);
+
+// ============================================================
+// DAILY USAGE
+// ============================================================
+
+app.get(
+    '/api/usage/daily',
+    (_req, res) => {
+
+        try {
+
+            const rows =
+                db.prepare(`
+
+                    SELECT
+
+                        usage_date,
+
+                        SUM(interactions)
+                            AS interactions,
+
+                        SUM(sessions)
+                            AS sessions,
+
+                        ROUND(
+                            AVG(avg_latency_ms)
+                        ) AS avg_latency_ms
+
+                    FROM daily_usage
+
+                    GROUP BY usage_date
+
+                    ORDER BY usage_date ASC
+
+                `).all();
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] DAILY USAGE ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'daily_usage_failed'
+
+            });
+        }
+    }
 );
 
 // ============================================================
 // START SERVER
 // ============================================================
 
-app.listen(port, () => {
+app.listen(
+    port,
+    () => {
 
-  console.log(
-    `Gemini observability API listening on http://localhost:${port}`
-  );
+        console.log(
+            `[ai-obs] AI observability API listening on http://localhost:${port}`
+        );
 
-});
+        console.log(
+            '[ai-obs] Supported products: Gemini, ChatGPT, Claude, Copilot, Perplexity'
+        );
+    }
+);
