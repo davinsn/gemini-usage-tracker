@@ -1,3 +1,7 @@
+/* ============================================================
+   RESET
+============================================================ */
+
 * {
     box-sizing: border-box;
 }
@@ -11,16 +15,22 @@ body {
 }
 
 body {
-    font-family: Arial, sans-serif;
-    background: #f5f7fa;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #eef0f3;
     color: #1f2937;
 }
 
+
+/* ============================================================
+   DASHBOARD
+============================================================ */
+
 .dashboard {
-    width: 100%;
-    max-width: 1600px;
+    width: calc(100% - 32px);
+    max-width: 1400px;
+
     margin: 0 auto;
-    padding: 24px;
+    padding: 20px 0 30px;
 }
 
 
@@ -28,35 +38,84 @@ body {
    HEADER
 ============================================================ */
 
-header {
+.dashboard-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
+
+    margin-bottom: 22px;
 }
 
-header h1 {
+.dashboard-header h1 {
     margin: 0;
-    font-size: 30px;
+
+    font-size: 26px;
+    font-weight: 700;
+
+    color: #111827;
 }
 
-header p {
-    margin: 6px 0 0;
+.dashboard-header p {
+    margin: 4px 0 0;
+
+    font-size: 13px;
     color: #6b7280;
 }
 
 .status {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
+    gap: 7px;
+
+    padding: 6px 10px;
+
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+
+    font-size: 12px;
+    color: #374151;
 }
 
 .status-dot {
-    width: 10px;
-    height: 10px;
+    width: 7px;
+    height: 7px;
+
     border-radius: 50%;
     background: #22c55e;
+}
+
+
+/* ============================================================
+   SECTIONS
+============================================================ */
+
+.overview-section,
+.platform-section,
+.dashboard-section,
+.table-section {
+    width: 100%;
+    margin-bottom: 24px;
+}
+
+.section-title {
+    margin-bottom: 10px;
+}
+
+.section-title h2 {
+    margin: 0;
+
+    font-size: 19px;
+    font-weight: 700;
+
+    color: #111827;
+}
+
+.section-title p {
+    margin: 4px 0 0;
+
+    font-size: 12px;
+    color: #6b7280;
 }
 
 
@@ -66,40 +125,70 @@ header p {
 
 .metrics {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 16px;
-    margin-bottom: 30px;
+
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+
+    gap: 10px;
 }
 
 .metric-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    min-width: 0;
+
+    padding: 15px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .metric-label {
     display: block;
-    font-size: 13px;
+
+    margin-bottom: 6px;
+
+    font-size: 11px;
+    font-weight: 600;
+
     color: #6b7280;
-    margin-bottom: 8px;
+
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 
 .metric-card strong {
-    font-size: 28px;
+    display: block;
+
+    font-size: 23px;
+    line-height: 1.2;
+
+    color: #111827;
+}
+
+.metric-description {
+    display: block;
+
+    margin-top: 5px;
+
+    font-size: 10px;
+    line-height: 1.3;
+
+    color: #9ca3af;
 }
 
 
 /* ============================================================
-   SECTION TITLE
+   PROVIDER CARDS
 ============================================================ */
 
-.section-title {
-    margin-bottom: 15px;
+.provider-metrics {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.section-title h2 {
-    margin: 0;
+.provider-metrics .metric-card {
+    min-height: 95px;
 }
 
 
@@ -109,22 +198,24 @@ header p {
 
 .charts {
     display: grid;
+
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
+
+    gap: 14px;
 }
 
 .chart-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-
-    /*
-     * Prevent the chart from causing the grid
-     * to continuously grow.
-     */
     min-width: 0;
-    min-height: 0;
+
+    padding: 16px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+
     overflow: hidden;
 }
 
@@ -133,12 +224,25 @@ header p {
 }
 
 .chart-header {
-    margin-bottom: 15px;
+    margin-bottom: 10px;
 }
 
 .chart-header h2 {
     margin: 0;
-    font-size: 18px;
+
+    font-size: 15px;
+    font-weight: 600;
+
+    color: #111827;
+}
+
+.chart-header p {
+    margin: 4px 0 0;
+
+    font-size: 11px;
+    line-height: 1.4;
+
+    color: #6b7280;
 }
 
 
@@ -150,25 +254,30 @@ header p {
     position: relative;
 
     width: 100%;
-
-    height: 350px;
-    min-height: 350px;
-    max-height: 350px;
+    height: 260px;
 
     overflow: hidden;
 }
 
 .chart-container.large {
-    height: 450px;
-    min-height: 450px;
-    max-height: 450px;
+    height: 330px;
 }
 
 .chart-container canvas {
-    display: block;
+    display: block !important;
 
     width: 100% !important;
     height: 100% !important;
+}
+
+
+/* ============================================================
+   TOKEN CHARTS
+============================================================ */
+
+#providerTokenChart,
+#tokenTypeChart {
+    max-width: 100%;
 }
 
 
@@ -177,39 +286,70 @@ header p {
 ============================================================ */
 
 .table-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
+    width: 100%;
 
-    margin-bottom: 30px;
+    padding: 14px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 
     overflow: hidden;
 }
 
 .table-wrapper {
     width: 100%;
+
     overflow-x: auto;
+
+    border: 1px solid #eef0f3;
+    border-radius: 7px;
 }
 
 table {
     width: 100%;
+    min-width: 1050px;
+
     border-collapse: collapse;
 }
 
 th,
 td {
-    padding: 12px;
+    padding: 9px 11px;
+
     text-align: left;
-    border-bottom: 1px solid #e5e7eb;
+
+    border-bottom: 1px solid #eef0f3;
+
+    white-space: nowrap;
 }
 
 th {
-    font-size: 13px;
+    font-size: 10px;
+    font-weight: 600;
+
     color: #6b7280;
+
+    background: #f8fafc;
+
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
 }
 
 td {
-    font-size: 14px;
+    font-size: 12px;
+    color: #374151;
+}
+
+tbody tr:hover td {
+    background: #f8fafc;
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
 }
 
 
@@ -220,23 +360,53 @@ td {
 footer {
     display: flex;
     justify-content: center;
-    gap: 6px;
+    align-items: center;
 
-    padding: 20px;
+    gap: 5px;
 
-    color: #6b7280;
-    font-size: 13px;
+    padding: 8px 0;
+
+    color: #9ca3af;
+    font-size: 11px;
 }
 
 
 /* ============================================================
-   RESPONSIVE
+   TABLET
 ============================================================ */
 
 @media (max-width: 1100px) {
 
+    .dashboard {
+        width: calc(100% - 24px);
+    }
+
     .metrics {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .provider-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+
+/* ============================================================
+   SMALL TABLET
+============================================================ */
+
+@media (max-width: 850px) {
+
+    .dashboard {
+        width: calc(100% - 20px);
+    }
+
+    .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .provider-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .charts {
@@ -249,31 +419,53 @@ footer {
 }
 
 
+/* ============================================================
+   MOBILE
+============================================================ */
+
 @media (max-width: 600px) {
 
     .dashboard {
-        padding: 15px;
+        width: calc(100% - 16px);
+
+        padding-top: 15px;
     }
 
-    header {
+    .dashboard-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 15px;
+
+        gap: 10px;
+
+        margin-bottom: 18px;
     }
 
-    .metrics {
+    .dashboard-header h1 {
+        font-size: 23px;
+    }
+
+    .metrics,
+    .provider-metrics {
         grid-template-columns: 1fr;
     }
 
+    .metric-card {
+        padding: 14px;
+    }
+
+    .chart-card {
+        padding: 14px;
+    }
+
     .chart-container {
-        height: 300px;
-        min-height: 300px;
-        max-height: 300px;
+        height: 240px;
     }
 
     .chart-container.large {
-        height: 350px;
-        min-height: 350px;
-        max-height: 350px;
+        height: 300px;
+    }
+
+    .section-title h2 {
+        font-size: 18px;
     }
 }
