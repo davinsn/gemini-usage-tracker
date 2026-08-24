@@ -1,20 +1,14 @@
 console.log('[gemini-obs] SERVICE WORKER LOADED');
 
-// ============================================================
-// CONFIG
-// ============================================================
-
 const API_BASE_URL = 'http://localhost:4000';
 
-
 // ============================================================
-// INSTALL / STARTUP
+// INSTALL / UPDATE
 // ============================================================
 
 chrome.runtime.onInstalled.addListener(() => {
     console.log('[gemini-obs] Extension installed/updated');
 });
-
 
 // ============================================================
 // MESSAGE HANDLER
@@ -23,20 +17,35 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener(
     (message, sender, sendResponse) => {
 
-        console.log(
-            '[gemini-obs] MESSAGE RECEIVED:',
-            message
-        );
-
+        console.log('[gemini-obs] ===============================');
+        console.log('[gemini-obs] MESSAGE RECEIVED');
+        console.log('[gemini-obs] Raw message:', message);
+        console.log('[gemini-obs] Message type:', message?.type);
+        console.log('[gemini-obs] Sender tab:', sender?.tab?.id);
+        console.log('[gemini-obs] ===============================');
 
         // --------------------------------------------------------
-        // Ignore unrelated messages
+        // Validate message
         // --------------------------------------------------------
 
-        if (
-            !message ||
-            message.type !== 'GEMINI_USAGE_EVENT'
-        ) {
+        if (!message) {
+            console.error(
+                '[gemini-obs] REJECTED: message is undefined'
+            );
+
+            sendResponse({
+                accepted: false,
+                error: 'message_undefined'
+            });
+
+            return false;
+        }
+
+        if (message.type !== 'GEMINI_USAGE_EVENT') {
+            console.warn(
+                '[gemini-obs] Ignoring unrelated message:',
+                message.type
+            );
 
             sendResponse({
                 accepted: false,
@@ -46,19 +55,48 @@ chrome.runtime.onMessage.addListener(
             return false;
         }
 
-
         // --------------------------------------------------------
-        // Validate event
+        // Get event
         // --------------------------------------------------------
 
-        const event =
-            message.event || {};
+        const event = message.event;
 
+        console.log(
+            '[gemini-obs] EVENT OBJECT:',
+            event
+        );
 
-        if (!event.email) {
-
+        if (!event) {
             console.error(
-                '[gemini-obs] EVENT REJECTED: No email'
+                '[gemini-obs] REJECTED: event is missing'
+            );
+
+            sendResponse({
+                accepted: false,
+                error: 'event_undefined'
+            });
+
+            return false;
+        }
+
+        // --------------------------------------------------------
+        // Resolve employee email
+        // --------------------------------------------------------
+
+        const email =
+            event.email ||
+            event.employeeEmail ||
+            message.employeeEmail ||
+            null;
+
+        console.log(
+            '[gemini-obs] RESOLVED EMAIL:',
+            email
+        );
+
+        if (!email) {
+            console.error(
+                '[gemini-obs] REJECTED: email is missing'
             );
 
             sendResponse({
@@ -69,11 +107,20 @@ chrome.runtime.onMessage.addListener(
             return false;
         }
 
+        // --------------------------------------------------------
+        // Event type
+        // --------------------------------------------------------
 
-        if (!event.event_type) {
+        const eventType = event.event_type;
 
+        console.log(
+            '[gemini-obs] EVENT TYPE:',
+            eventType
+        );
+
+        if (!eventType) {
             console.error(
-                '[gemini-obs] EVENT REJECTED: No event_type'
+                '[gemini-obs] REJECTED: event_type is missing'
             );
 
             sendResponse({
@@ -84,30 +131,20 @@ chrome.runtime.onMessage.addListener(
             return false;
         }
 
+        // --------------------------------------------------------
+        // Timestamp
+        // --------------------------------------------------------
 
-        if (!event.occurred_at) {
-
-            console.error(
-                '[gemini-obs] EVENT REJECTED: No occurred_at'
-            );
-
-            sendResponse({
-                accepted: false,
-                error: 'missing_occurred_at'
-            });
-
-            return false;
-        }
-
+        const occurredAt =
+            event.occurred_at ||
+            new Date().toISOString();
 
         // --------------------------------------------------------
-        // Add extension information
+        // Build backend payload
         // --------------------------------------------------------
 
         const payload = {
-
-            email:
-                event.email,
+            email: email,
 
             department:
                 event.department ?? null,
@@ -116,7 +153,7 @@ chrome.runtime.onMessage.addListener(
                 event.role ?? null,
 
             event_type:
-                event.event_type,
+                eventType,
 
             session_id:
                 event.session_id ?? null,
@@ -128,7 +165,7 @@ chrome.runtime.onMessage.addListener(
                 event.model ?? null,
 
             occurred_at:
-                event.occurred_at,
+                occurredAt,
 
             latency_ms:
                 event.latency_ms ?? null,
@@ -140,10 +177,10 @@ chrome.runtime.onMessage.addListener(
                 event.response_length ?? null,
 
             metadata: {
-
                 ...(event.metadata || {}),
 
-                extension: 'gemini-observability',
+                extension:
+                    'gemini-observability',
 
                 extension_version:
                     chrome.runtime.getManifest().version,
@@ -152,22 +189,24 @@ chrome.runtime.onMessage.addListener(
                     'chrome-extension',
 
                 tab_id:
-                    sender.tab?.id ?? null,
+                    sender?.tab?.id ?? null,
 
                 tab_url:
-                    sender.tab?.url ?? null
+                    sender?.tab?.url ?? null
             }
         };
 
-
+        console.log('[gemini-obs] ===============================');
+        console.log('[gemini-obs] SENDING TO BACKEND');
         console.log(
-            '[gemini-obs] SENDING TO API:',
-            payload
+            '[gemini-obs] URL:',
+            `${API_BASE_URL}/api/usage/events`
         );
-
+        console.log('[gemini-obs] Payload:', payload);
+        console.log('[gemini-obs] ===============================');
 
         // --------------------------------------------------------
-        // Send to Node.js backend
+        // Send to Node.js
         // --------------------------------------------------------
 
         fetch(
@@ -176,83 +215,132 @@ chrome.runtime.onMessage.addListener(
                 method: 'POST',
 
                 headers: {
-                    'Content-Type':
-                        'application/json'
+                    'Content-Type': 'application/json'
                 },
 
-                body:
-                    JSON.stringify(payload)
+                body: JSON.stringify(payload)
             }
         )
             .then(async response => {
 
+                console.log(
+                    '[gemini-obs] BACKEND HTTP STATUS:',
+                    response.status
+                );
+
                 let data = null;
 
-                try {
-                    data =
-                        await response.json();
-                } catch {
-                    data = null;
+                const contentType =
+                    response.headers.get('content-type') || '';
+
+                if (
+                    contentType.includes(
+                        'application/json'
+                    )
+                ) {
+                    try {
+                        data = await response.json();
+                    } catch (error) {
+                        console.error(
+                            '[gemini-obs] JSON PARSE ERROR:',
+                            error
+                        );
+                    }
+                } else {
+                    try {
+                        data = await response.text();
+                    } catch {
+                        data = null;
+                    }
                 }
 
+                console.log(
+                    '[gemini-obs] BACKEND RESPONSE:',
+                    data
+                );
+
+                // ------------------------------------------------
+                // Backend rejected request
+                // ------------------------------------------------
 
                 if (!response.ok) {
 
                     console.error(
-                        '[gemini-obs] API ERROR:',
-                        response.status,
+                        '[gemini-obs] BACKEND REJECTED EVENT'
+                    );
+
+                    console.error(
+                        '[gemini-obs] Status:',
+                        response.status
+                    );
+
+                    console.error(
+                        '[gemini-obs] Response:',
                         data
                     );
 
                     sendResponse({
                         accepted: false,
-
-                        error:
-                            'api_error',
-
-                        status:
-                            response.status,
-
-                        data
+                        error: 'api_error',
+                        status: response.status,
+                        data: data
                     });
 
                     return;
                 }
 
+                // ------------------------------------------------
+                // Success
+                // ------------------------------------------------
 
                 console.log(
-                    '[gemini-obs] API SUCCESS:',
-                    data
+                    '[gemini-obs] ==============================='
                 );
 
+                console.log(
+                    '[gemini-obs] EVENT SUCCESSFULLY SENT'
+                );
+
+                console.log(
+                    '[gemini-obs] Employee:',
+                    email
+                );
+
+                console.log(
+                    '[gemini-obs] Event:',
+                    eventType
+                );
+
+                console.log(
+                    '[gemini-obs] Interaction:',
+                    event.interaction_id
+                );
+
+                console.log(
+                    '[gemini-obs] ==============================='
+                );
 
                 sendResponse({
                     accepted: true,
                     api: data
                 });
             })
+
             .catch(error => {
 
                 console.error(
-                    '[gemini-obs] FETCH ERROR:',
+                    '[gemini-obs] BACKEND FETCH ERROR:',
                     error
                 );
 
-
                 sendResponse({
                     accepted: false,
-
-                    error:
-                        'backend_unreachable',
-
-                    message:
-                        error.message
+                    error: 'backend_unreachable',
+                    message: error.message
                 });
             });
 
-
-        // IMPORTANT:
-        // Keeps sendResponse alive while fetch() runs.
+        // Keep the message channel alive while fetch runs.
         return true;
     }
 );
