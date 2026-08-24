@@ -17,12 +17,32 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener(
     (message, sender, sendResponse) => {
 
-        console.log('[chatgpt-obs] ===============================');
-        console.log('[chatgpt-obs] MESSAGE RECEIVED');
-        console.log('[chatgpt-obs] Raw message:', message);
-        console.log('[chatgpt-obs] Message type:', message?.type);
-        console.log('[chatgpt-obs] Sender tab:', sender?.tab?.id);
-        console.log('[chatgpt-obs] ===============================');
+        console.log(
+            '[chatgpt-obs] ==============================='
+        );
+
+        console.log(
+            '[chatgpt-obs] MESSAGE RECEIVED'
+        );
+
+        console.log(
+            '[chatgpt-obs] Raw message:',
+            message
+        );
+
+        console.log(
+            '[chatgpt-obs] Message type:',
+            message?.type
+        );
+
+        console.log(
+            '[chatgpt-obs] Sender tab:',
+            sender?.tab?.id
+        );
+
+        console.log(
+            '[chatgpt-obs] ==============================='
+        );
 
         // --------------------------------------------------------
         // Validate message
@@ -108,6 +128,37 @@ chrome.runtime.onMessage.addListener(
         }
 
         // --------------------------------------------------------
+        // HARD-CODE CHATGPT PROVIDER
+        // --------------------------------------------------------
+        // This extension is ONLY for ChatGPT.
+        //
+        // Do NOT inherit provider/product from:
+        // - Gemini
+        // - Google
+        // - another extension
+        // - window config
+        // - backend defaults
+        //
+        // Always identify this extension as:
+        //
+        // provider = openai
+        // product  = chatgpt
+        // --------------------------------------------------------
+
+        const provider = 'openai';
+        const product = 'chatgpt';
+
+        console.log(
+            '[chatgpt-obs] PROVIDER:',
+            provider
+        );
+
+        console.log(
+            '[chatgpt-obs] PRODUCT:',
+            product
+        );
+
+        // --------------------------------------------------------
         // Event type
         // --------------------------------------------------------
 
@@ -144,13 +195,27 @@ chrome.runtime.onMessage.addListener(
         // --------------------------------------------------------
 
         const payload = {
+
+            // ====================================================
+            // IDENTITY
+            // ====================================================
+
             email: email,
+
+            // IMPORTANT:
+            // These MUST be sent to the backend.
+            provider: provider,
+            product: product,
 
             department:
                 event.department ?? null,
 
             role:
                 event.role ?? null,
+
+            // ====================================================
+            // EVENT
+            // ====================================================
 
             event_type:
                 eventType,
@@ -176,7 +241,12 @@ chrome.runtime.onMessage.addListener(
             response_length:
                 event.response_length ?? null,
 
+            // ====================================================
+            // METADATA
+            // ====================================================
+
             metadata: {
+
                 ...(event.metadata || {}),
 
                 extension:
@@ -188,6 +258,12 @@ chrome.runtime.onMessage.addListener(
                 source:
                     'chrome-extension',
 
+                provider:
+                    provider,
+
+                product:
+                    product,
+
                 tab_id:
                     sender?.tab?.id ?? null,
 
@@ -196,17 +272,46 @@ chrome.runtime.onMessage.addListener(
             }
         };
 
+        // --------------------------------------------------------
+        // Log final payload
+        // --------------------------------------------------------
+
         console.log(
             '[chatgpt-obs] ==============================='
         );
 
         console.log(
-            '[chatgpt-obs] SENDING TO BACKEND'
+            '[chatgpt-obs] FINAL BACKEND PAYLOAD'
         );
 
         console.log(
-            '[chatgpt-obs] URL:',
-            `${API_BASE_URL}/api/usage/events`
+            '[chatgpt-obs] Email:',
+            payload.email
+        );
+
+        console.log(
+            '[chatgpt-obs] Provider:',
+            payload.provider
+        );
+
+        console.log(
+            '[chatgpt-obs] Product:',
+            payload.product
+        );
+
+        console.log(
+            '[chatgpt-obs] Event:',
+            payload.event_type
+        );
+
+        console.log(
+            '[chatgpt-obs] Session:',
+            payload.session_id
+        );
+
+        console.log(
+            '[chatgpt-obs] Interaction:',
+            payload.interaction_id
         );
 
         console.log(
@@ -219,7 +324,7 @@ chrome.runtime.onMessage.addListener(
         );
 
         // --------------------------------------------------------
-        // Send to Node.js
+        // Send to Node.js backend
         // --------------------------------------------------------
 
         fetch(
@@ -256,20 +361,29 @@ chrome.runtime.onMessage.addListener(
                         'application/json'
                     )
                 ) {
+
                     try {
+
                         data =
                             await response.json();
+
                     } catch (error) {
+
                         console.error(
                             '[chatgpt-obs] JSON PARSE ERROR:',
                             error
                         );
                     }
+
                 } else {
+
                     try {
+
                         data =
                             await response.text();
+
                     } catch {
+
                         data = null;
                     }
                 }
@@ -324,6 +438,16 @@ chrome.runtime.onMessage.addListener(
                 console.log(
                     '[chatgpt-obs] Employee:',
                     email
+                );
+
+                console.log(
+                    '[chatgpt-obs] Provider:',
+                    provider
+                );
+
+                console.log(
+                    '[chatgpt-obs] Product:',
+                    product
                 );
 
                 console.log(

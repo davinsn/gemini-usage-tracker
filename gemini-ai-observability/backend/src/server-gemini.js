@@ -7,16 +7,17 @@ import { fileURLToPath } from 'url';
 import DatabaseConstructor from 'better-sqlite3';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const app = express();
 const port = Number(process.env.PORT || 4000);
 
 // ============================================================
-// GEMINI PROVIDER CONFIGURATION
+// DEFAULT PROVIDER CONFIGURATION
 // ============================================================
+// Used only when an older Gemini event does not explicitly
+// provide provider/product.
 
-const PROVIDER = 'google';
-const PRODUCT = 'gemini';
+const DEFAULT_PROVIDER = 'google';
+const DEFAULT_PRODUCT = 'gemini';
 
 // ============================================================
 // DATABASE
@@ -54,7 +55,11 @@ db.exec(
 // MIDDLEWARE
 // ============================================================
 
-app.use(cors({ origin: true }));
+app.use(
+    cors({
+        origin: true
+    })
+);
 
 app.use(
     express.json({
@@ -87,19 +92,16 @@ app.get('/', (_req, res) => {
 
         res.json({
             ok: true,
-            service: 'gemini-observability-api',
+            service: 'ai-observability-api',
             db: 'sqlite',
-            provider: PROVIDER,
-            product: PRODUCT
+            defaultProvider: DEFAULT_PROVIDER,
+            defaultProduct: DEFAULT_PRODUCT
         });
-
     } catch (error) {
-
         res.status(503).json({
             ok: false,
             error: 'database_unavailable'
         });
-
     }
 });
 
@@ -108,12 +110,10 @@ app.get('/', (_req, res) => {
 // ============================================================
 
 function validEmail(email) {
-
     return (
         typeof email === 'string' &&
         /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
     );
-
 }
 
 // ============================================================
@@ -211,10 +211,21 @@ app.post(
 
         const body = req.body || {};
 
+        // ----------------------------------------------------
+        // EVENT DATA
+        // ----------------------------------------------------
+
         const {
             email,
+            employeeEmail,
             department,
             role,
+
+            // IMPORTANT:
+            // These now come from the AI extension.
+            provider,
+            product,
+
             event_type,
             session_id,
             interaction_id,
@@ -227,21 +238,55 @@ app.post(
         } = body;
 
         // ----------------------------------------------------
+        // SUPPORT BOTH email AND employeeEmail
+        // ----------------------------------------------------
+
+        const resolvedEmail =
+            email ||
+            employeeEmail;
+
+        // ----------------------------------------------------
+        // PROVIDER / PRODUCT
+        // ----------------------------------------------------
+
+        const eventProvider =
+            provider ||
+            DEFAULT_PROVIDER;
+
+        const eventProduct =
+            product ||
+            DEFAULT_PRODUCT;
+
+        // ----------------------------------------------------
         // VALIDATION
         // ----------------------------------------------------
 
         if (
-            !validEmail(email) ||
+            !validEmail(resolvedEmail) ||
             typeof event_type !== 'string' ||
             !occurred_at
         ) {
-
             return res.status(400).json({
                 error:
                     'email, event_type and occurred_at are required'
             });
-
         }
+
+        // ----------------------------------------------------
+        // LOG EVENT
+        // ----------------------------------------------------
+
+        console.log(
+            '[ai-obs] EVENT:',
+            {
+                email: resolvedEmail,
+                provider: eventProvider,
+                product: eventProduct,
+                event_type,
+                session_id,
+                interaction_id
+            }
+        );
 
         try {
 
@@ -252,15 +297,26 @@ app.post(
                 // ------------------------------------------------
 
                 upsertEmployee.run({
-                    email,
+                    email: resolvedEmail,
+
                     department:
                         department ?? null,
+
                     role:
                         role ?? null
                 });
 
+                const employeeRow =
+                    getEmployeeId.get(resolvedEmail);
+
+                if (!employeeRow) {
+                    throw new Error(
+                        'Employee could not be created or found'
+                    );
+                }
+
                 const employeeId =
-                    getEmployeeId.get(email).id;
+                    employeeRow.id;
 
                 // ------------------------------------------------
                 // INTERACTION ID
@@ -295,10 +351,10 @@ app.post(
                                 employeeId,
 
                             provider:
-                                PROVIDER,
+                                eventProvider,
 
                             product:
-                                PRODUCT,
+                                eventProduct,
 
                             interaction_id:
                                 interactionId,
@@ -339,10 +395,10 @@ app.post(
                             employeeId,
 
                         provider:
-                            PROVIDER,
+                            eventProvider,
 
                         product:
-                            PRODUCT,
+                            eventProduct,
 
                         event_type,
 
@@ -371,14 +427,12 @@ app.post(
                     });
 
                 return {
-
                     inserted:
                         result.changes === 1,
 
                     event_id:
                         result.lastInsertRowid
                 };
-
             });
 
             const {
@@ -401,15 +455,17 @@ app.post(
                         ? event_id
                         : null,
 
-                provider: PROVIDER,
+                provider:
+                    eventProvider,
 
-                product: PRODUCT
+                product:
+                    eventProduct
             });
 
         } catch (error) {
 
             console.error(
-                '[gemini-obs] EVENT INGESTION ERROR:',
+                '[ai-obs] EVENT INGESTION ERROR:',
                 error
             );
 
@@ -417,9 +473,7 @@ app.post(
                 error:
                     'event_ingestion_failed'
             });
-
         }
-
     }
 );
 
@@ -429,14 +483,24 @@ app.post(
 
 app.get(
     '/api/usage/summary',
-    (_req, res) => {
+    (req, res) => {
 
         try {
 
-            const row =
-                db.prepare(`
-                    SELECT
+            const provider =
+                req.query.provider ||
+                null;
 
+            const product =
+                req.query.product ||
+                null;
+
+            let row;
+
+            if (provider && product) {
+
+                row = db.prepare(`
+                    SELECT
                         COUNT(*) FILTER (
                             WHERE event_type =
                                 'interaction_started'
@@ -461,18 +525,45 @@ app.get(
 
                     WHERE provider = ?
                       AND product = ?
-                `)
-                .get(
-                    PROVIDER,
-                    PRODUCT
+                `).get(
+                    provider,
+                    product
                 );
+
+            } else {
+
+                row = db.prepare(`
+                    SELECT
+                        COUNT(*) FILTER (
+                            WHERE event_type =
+                                'interaction_started'
+                        ) AS interactions,
+
+                        COUNT(
+                            DISTINCT employee_id
+                        ) AS active_employees,
+
+                        COUNT(
+                            DISTINCT session_id
+                        ) AS sessions,
+
+                        ROUND(
+                            AVG(latency_ms)
+                            FILTER (
+                                WHERE latency_ms IS NOT NULL
+                            )
+                        ) AS avg_latency_ms
+
+                    FROM usage_events
+                `).get();
+            }
 
             res.json(row);
 
         } catch (error) {
 
             console.error(
-                '[gemini-obs] SUMMARY ERROR:',
+                '[ai-obs] SUMMARY ERROR:',
                 error
             );
 
@@ -480,9 +571,7 @@ app.get(
                 error:
                     'summary_failed'
             });
-
         }
-
     }
 );
 
@@ -492,22 +581,57 @@ app.get(
 
 app.get(
     '/api/usage/by-employee',
-    (_req, res) => {
-
+    (req, res) => {
         try {
+            const provider =
+                req.query.provider || null;
 
-            const rows =
-                db.prepare(`
+            const product =
+                req.query.product || null;
+
+            let rows;
+
+            if (provider && product) {
+
+                rows = db.prepare(`
                     SELECT
-
                         e.email,
-
                         e.department,
 
                         COUNT(u.id) FILTER (
                             WHERE u.event_type =
                                 'interaction_started'
                         ) AS interactions,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND u.product = 'gemini'
+                        ) AS gemini,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND u.product = 'chatgpt'
+                        ) AS chatgpt,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND u.product = 'claude'
+                        ) AS claude,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND u.product = 'copilot'
+                        ) AS copilot,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND u.product = 'perplexity'
+                        ) AS perplexity,
 
                         COUNT(
                             DISTINCT u.session_id
@@ -516,8 +640,7 @@ app.get(
                         ROUND(
                             AVG(u.latency_ms)
                             FILTER (
-                                WHERE u.latency_ms
-                                IS NOT NULL
+                                WHERE u.latency_ms IS NOT NULL
                             )
                         ) AS avg_latency_ms
 
@@ -535,18 +658,85 @@ app.get(
 
                     ORDER BY
                         interactions DESC
-                `)
-                .all(
-                    PROVIDER,
-                    PRODUCT
+                `).all(
+                    provider,
+                    product
                 );
+
+            } else {
+
+                rows = db.prepare(`
+                    SELECT
+                        e.email,
+                        e.department,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                        ) AS interactions,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'gemini'
+                        ) AS gemini,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'chatgpt'
+                        ) AS chatgpt,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'claude'
+                        ) AS claude,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'copilot'
+                        ) AS copilot,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'perplexity'
+                        ) AS perplexity,
+
+                        COUNT(
+                            DISTINCT u.session_id
+                        ) AS sessions,
+
+                        ROUND(
+                            AVG(u.latency_ms)
+                            FILTER (
+                                WHERE u.latency_ms IS NOT NULL
+                            )
+                        ) AS avg_latency_ms
+
+                    FROM employees e
+
+                    LEFT JOIN usage_events u
+                        ON u.employee_id = e.id
+
+                    GROUP BY
+                        e.id,
+                        e.email,
+                        e.department
+
+                    ORDER BY
+                        interactions DESC
+                `).all();
+            }
 
             res.json(rows);
 
         } catch (error) {
 
             console.error(
-                '[gemini-obs] EMPLOYEE SUMMARY ERROR:',
+                '[ai-obs] EMPLOYEE SUMMARY ERROR:',
                 error
             );
 
@@ -554,9 +744,7 @@ app.get(
                 error:
                     'employee_summary_failed'
             });
-
         }
-
     }
 );
 
@@ -566,14 +754,21 @@ app.get(
 
 app.get(
     '/api/usage/by-product',
-    (_req, res) => {
+    (req, res) => {
 
         try {
 
-            const rows =
-                db.prepare(`
-                    SELECT
+            const provider =
+                req.query.provider ||
+                null;
 
+            let rows;
+
+            if (provider) {
+
+                rows = db.prepare(`
+                    SELECT
+                        provider,
                         product,
 
                         COUNT(*) FILTER (
@@ -588,31 +783,62 @@ app.get(
                         ROUND(
                             AVG(latency_ms)
                             FILTER (
-                                WHERE latency_ms
-                                IS NOT NULL
+                                WHERE latency_ms IS NOT NULL
                             )
                         ) AS avg_latency_ms
 
                     FROM usage_events
 
                     WHERE provider = ?
-                      AND product = ?
 
-                    GROUP BY product
+                    GROUP BY
+                        provider,
+                        product
 
-                    ORDER BY interactions DESC
-                `)
-                .all(
-                    PROVIDER,
-                    PRODUCT
-                );
+                    ORDER BY
+                        interactions DESC
+                `).all(provider);
+
+            } else {
+
+                rows = db.prepare(`
+                    SELECT
+                        provider,
+                        product,
+
+                        COUNT(*) FILTER (
+                            WHERE event_type =
+                                'interaction_started'
+                        ) AS interactions,
+
+                        COUNT(
+                            DISTINCT session_id
+                        ) AS sessions,
+
+                        ROUND(
+                            AVG(latency_ms)
+                            FILTER (
+                                WHERE latency_ms IS NOT NULL
+                            )
+                        ) AS avg_latency_ms
+
+                    FROM usage_events
+
+                    GROUP BY
+                        provider,
+                        product
+
+                    ORDER BY
+                        interactions DESC
+                `).all();
+            }
 
             res.json(rows);
 
         } catch (error) {
 
             console.error(
-                '[gemini-obs] PRODUCT SUMMARY ERROR:',
+                '[ai-obs] PRODUCT SUMMARY ERROR:',
                 error
             );
 
@@ -620,9 +846,7 @@ app.get(
                 error:
                     'product_summary_failed'
             });
-
         }
-
     }
 );
 
@@ -639,7 +863,6 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
-
                         provider,
 
                         COUNT(*) FILTER (
@@ -648,35 +871,35 @@ app.get(
                         ) AS interactions,
 
                         COUNT(
+                            DISTINCT employee_id
+                        ) AS active_employees,
+
+                        COUNT(
                             DISTINCT session_id
                         ) AS sessions,
 
                         ROUND(
                             AVG(latency_ms)
                             FILTER (
-                                WHERE latency_ms
-                                IS NOT NULL
+                                WHERE latency_ms IS NOT NULL
                             )
                         ) AS avg_latency_ms
 
                     FROM usage_events
 
-                    WHERE provider = ?
+                    WHERE provider IS NOT NULL
 
                     GROUP BY provider
 
                     ORDER BY interactions DESC
-                `)
-                .all(
-                    PROVIDER
-                );
+                `).all();
 
             res.json(rows);
 
         } catch (error) {
 
             console.error(
-                '[gemini-obs] PROVIDER SUMMARY ERROR:',
+                '[ai-obs] PROVIDER SUMMARY ERROR:',
                 error
             );
 
@@ -684,9 +907,73 @@ app.get(
                 error:
                     'provider_summary_failed'
             });
-
         }
+    }
+);
 
+// ============================================================
+// USAGE BY PROVIDER + PRODUCT
+// ============================================================
+
+app.get(
+    '/api/usage/by-provider-product',
+    (_req, res) => {
+
+        try {
+
+            const rows =
+                db.prepare(`
+                    SELECT
+                        provider,
+                        product,
+
+                        COUNT(*) FILTER (
+                            WHERE event_type =
+                                'interaction_started'
+                        ) AS interactions,
+
+                        COUNT(
+                            DISTINCT employee_id
+                        ) AS active_employees,
+
+                        COUNT(
+                            DISTINCT session_id
+                        ) AS sessions,
+
+                        ROUND(
+                            AVG(latency_ms)
+                            FILTER (
+                                WHERE latency_ms IS NOT NULL
+                            )
+                        ) AS avg_latency_ms
+
+                    FROM usage_events
+
+                    WHERE provider IS NOT NULL
+                      AND product IS NOT NULL
+
+                    GROUP BY
+                        provider,
+                        product
+
+                    ORDER BY
+                        interactions DESC
+                `).all();
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] PROVIDER PRODUCT ERROR:',
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    'provider_product_summary_failed'
+            });
+        }
     }
 );
 
@@ -703,13 +990,9 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
-
                         e.email,
-
                         e.department,
-
                         u.provider,
-
                         u.product,
 
                         COUNT(u.id) FILTER (
@@ -724,14 +1007,13 @@ app.get(
                         ROUND(
                             AVG(u.latency_ms)
                             FILTER (
-                                WHERE u.latency_ms
-                                IS NOT NULL
+                                WHERE u.latency_ms IS NOT NULL
                             )
                         ) AS avg_latency_ms
 
                     FROM employees e
 
-                    LEFT JOIN usage_events u
+                    INNER JOIN usage_events u
                         ON u.employee_id = e.id
 
                     WHERE
@@ -739,7 +1021,6 @@ app.get(
                         AND u.product IS NOT NULL
 
                     GROUP BY
-
                         e.id,
                         e.email,
                         e.department,
@@ -748,15 +1029,14 @@ app.get(
 
                     ORDER BY
                         interactions DESC
-                `)
-                .all();
+                `).all();
 
             res.json(rows);
 
         } catch (error) {
 
             console.error(
-                '[gemini-obs] EMPLOYEE PRODUCT ERROR:',
+                '[ai-obs] EMPLOYEE PRODUCT ERROR:',
                 error
             );
 
@@ -764,9 +1044,70 @@ app.get(
                 error:
                     'employee_product_summary_failed'
             });
-
         }
+    }
+);
 
+// ============================================================
+// RAW USAGE EVENTS
+// ============================================================
+
+app.get(
+    '/api/usage/events',
+    (req, res) => {
+
+        try {
+
+            const limit =
+                Math.min(
+                    Number(req.query.limit) || 100,
+                    1000
+                );
+
+            const rows =
+                db.prepare(`
+                    SELECT
+                        u.id,
+                        e.email,
+                        e.department,
+                        e.role,
+                        u.provider,
+                        u.product,
+                        u.event_type,
+                        u.session_id,
+                        u.interaction_id,
+                        u.model,
+                        u.occurred_at,
+                        u.latency_ms,
+                        u.prompt_length,
+                        u.response_length,
+                        u.metadata
+
+                    FROM usage_events u
+
+                    INNER JOIN employees e
+                        ON e.id = u.employee_id
+
+                    ORDER BY
+                        u.id DESC
+
+                    LIMIT ?
+                `).all(limit);
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EVENTS QUERY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+                error:
+                    'events_query_failed'
+            });
+        }
     }
 );
 
@@ -783,24 +1124,23 @@ app.listen(
         );
 
         console.log(
-            `[gemini-obs] Gemini observability API listening on http://localhost:${port}`
+            `[ai-obs] AI observability API listening on http://localhost:${port}`
         );
 
         console.log(
-            `[gemini-obs] Provider: ${PROVIDER}`
+            `[ai-obs] Default provider: ${DEFAULT_PROVIDER}`
         );
 
         console.log(
-            `[gemini-obs] Product: ${PRODUCT}`
+            `[ai-obs] Default product: ${DEFAULT_PRODUCT}`
         );
 
         console.log(
-            `[gemini-obs] SQLite: ${dbPath}`
+            `[ai-obs] SQLite: ${dbPath}`
         );
 
         console.log(
             '================================='
         );
-
     }
 );
