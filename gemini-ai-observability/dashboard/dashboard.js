@@ -45,30 +45,73 @@ const AI_PRODUCTS = {
 
     gemini: {
         name: 'Gemini',
-        provider: 'Google'
+        provider: 'Google',
+        color: '#4285F4'
     },
 
     chatgpt: {
         name: 'ChatGPT',
-        provider: 'OpenAI'
+        provider: 'OpenAI',
+        color: '#10A37F'
     },
 
     claude: {
         name: 'Claude',
-        provider: 'Anthropic'
+        provider: 'Anthropic',
+        color: '#D97757'
     },
 
     copilot: {
         name: 'Copilot',
-        provider: 'Microsoft'
+        provider: 'Microsoft',
+        color: '#6366F1'
     },
 
     perplexity: {
         name: 'Perplexity',
-        provider: 'Perplexity'
+        provider: 'Perplexity',
+        color: '#20B8CD'
+    }
+};
+
+
+// ============================================================
+// FALLBACK COLOUR
+// ============================================================
+
+const DEFAULT_CHART_COLOR = '#64748B';
+
+
+// ============================================================
+// GET AI COLOUR
+// ============================================================
+
+function getProductColor(product) {
+
+    if (!product) {
+        return DEFAULT_CHART_COLOR;
     }
 
-};
+    const key = String(product).toLowerCase();
+
+    if (AI_PRODUCTS[key]) {
+        return AI_PRODUCTS[key].color;
+    }
+
+    return DEFAULT_CHART_COLOR;
+}
+
+
+// ============================================================
+// GET AI COLOURS FOR ARRAY
+// ============================================================
+
+function getProductColors(products) {
+
+    return products.map(product =>
+        getProductColor(product)
+    );
+}
 
 
 // ============================================================
@@ -89,17 +132,6 @@ function formatNumber(value) {
 
 // ============================================================
 // TOKEN VALUE HELPER
-// ============================================================
-// Supports different possible backend field names.
-//
-// Preferred:
-// total_tokens
-//
-// Also supports:
-// estimated_tokens
-// tokens
-//
-// This makes the dashboard more tolerant of backend changes.
 // ============================================================
 
 function getTokenValue(row) {
@@ -134,13 +166,9 @@ async function loadDashboard() {
         ] = await Promise.all([
 
             fetch('/api/usage/summary'),
-
             fetch('/api/usage/by-employee'),
-
             fetch('/api/usage/by-provider'),
-
             fetch('/api/usage/by-product'),
-
             fetch('/api/usage/by-employee-product')
 
         ]);
@@ -161,7 +189,6 @@ async function loadDashboard() {
             throw new Error(
                 'One or more API requests failed'
             );
-
         }
 
 
@@ -194,13 +221,9 @@ async function loadDashboard() {
         console.log('=================================');
 
         console.log('Summary:', summary);
-
         console.log('Employees:', employees);
-
         console.log('Providers:', providers);
-
         console.log('Products:', products);
-
         console.log(
             'Employee Products:',
             employeeProducts
@@ -259,7 +282,6 @@ async function loadDashboard() {
         );
 
     }
-
 }
 
 
@@ -339,11 +361,9 @@ function updateMetrics(summary) {
 
         latency.textContent =
             summary.avg_latency_ms != null
-
                 ? `${Number(
                     summary.avg_latency_ms
                 ).toFixed(0)} ms`
-
                 : 'N/A';
 
     }
@@ -366,7 +386,6 @@ function updateMetrics(summary) {
             );
 
     }
-
 }
 
 
@@ -431,7 +450,7 @@ function updateEmployeeCharts(employees) {
 
 
     // ========================================================
-    // UPDATE
+    // UPDATE EXISTING CHART
     // ========================================================
 
     if (employeeInteractionChart) {
@@ -449,7 +468,7 @@ function updateEmployeeCharts(employees) {
 
 
     // ========================================================
-    // CREATE
+    // CREATE CHART
     // ========================================================
 
     employeeInteractionChart =
@@ -459,24 +478,28 @@ function updateEmployeeCharts(employees) {
                 type: 'bar',
 
                 data: {
-
                     labels: labels,
 
                     datasets: [
-
                         {
                             label: 'Interactions',
 
-                            data: interactions
-                        }
+                            data: interactions,
 
+                            backgroundColor:
+                                '#6366F1',
+
+                            borderColor:
+                                '#6366F1',
+
+                            borderWidth: 1
+                        }
                     ]
                 },
 
                 options: chartOptions
             }
         );
-
 }
 
 
@@ -505,9 +528,21 @@ function updateProviderCharts(providers) {
         providers.map(
             provider =>
                 formatProductName(
-                    provider.provider ||
-                    provider.product
+                    provider.product ||
+                    provider.provider
                 )
+        );
+
+
+    // ========================================================
+    // PRODUCTS
+    // ========================================================
+
+    const products =
+        providers.map(
+            provider =>
+                provider.product ||
+                provider.provider
         );
 
 
@@ -551,6 +586,14 @@ function updateProviderCharts(providers) {
 
 
     // ========================================================
+    // COLOURS
+    // ========================================================
+
+    const colors =
+        getProductColors(products);
+
+
+    // ========================================================
     // INTERACTIONS BY AI
     // ========================================================
 
@@ -569,6 +612,12 @@ function updateProviderCharts(providers) {
             providerInteractionChart.data.datasets[0].data =
                 interactions;
 
+            providerInteractionChart.data.datasets[0].backgroundColor =
+                colors;
+
+            providerInteractionChart.data.datasets[0].borderColor =
+                colors;
+
             providerInteractionChart.update('none');
 
         }
@@ -579,7 +628,6 @@ function updateProviderCharts(providers) {
                 new Chart(
                     interactionCanvas,
                     {
-
                         type: 'bar',
 
                         data: {
@@ -587,24 +635,27 @@ function updateProviderCharts(providers) {
                             labels: labels,
 
                             datasets: [
-
                                 {
                                     label: 'Interactions',
 
-                                    data: interactions
-                                }
+                                    data: interactions,
 
+                                    backgroundColor:
+                                        colors,
+
+                                    borderColor:
+                                        colors,
+
+                                    borderWidth: 1
+                                }
                             ]
 
                         },
 
                         options: chartOptions
-
                     }
                 );
-
         }
-
     }
 
 
@@ -627,6 +678,12 @@ function updateProviderCharts(providers) {
             providerSessionChart.data.datasets[0].data =
                 sessions;
 
+            providerSessionChart.data.datasets[0].backgroundColor =
+                colors;
+
+            providerSessionChart.data.datasets[0].borderColor =
+                colors;
+
             providerSessionChart.update('none');
 
         }
@@ -637,7 +694,6 @@ function updateProviderCharts(providers) {
                 new Chart(
                     sessionCanvas,
                     {
-
                         type: 'bar',
 
                         data: {
@@ -645,24 +701,27 @@ function updateProviderCharts(providers) {
                             labels: labels,
 
                             datasets: [
-
                                 {
                                     label: 'Sessions',
 
-                                    data: sessions
-                                }
+                                    data: sessions,
 
+                                    backgroundColor:
+                                        colors,
+
+                                    borderColor:
+                                        colors,
+
+                                    borderWidth: 1
+                                }
                             ]
 
                         },
 
                         options: chartOptions
-
                     }
                 );
-
         }
-
     }
 
 
@@ -685,6 +744,12 @@ function updateProviderCharts(providers) {
             latencyChart.data.datasets[0].data =
                 latency;
 
+            latencyChart.data.datasets[0].backgroundColor =
+                colors;
+
+            latencyChart.data.datasets[0].borderColor =
+                colors;
+
             latencyChart.update('none');
 
         }
@@ -695,7 +760,6 @@ function updateProviderCharts(providers) {
                 new Chart(
                     latencyCanvas,
                     {
-
                         type: 'bar',
 
                         data: {
@@ -703,27 +767,29 @@ function updateProviderCharts(providers) {
                             labels: labels,
 
                             datasets: [
-
                                 {
                                     label:
                                         'Average Latency (ms)',
 
-                                    data: latency
-                                }
+                                    data: latency,
 
+                                    backgroundColor:
+                                        colors,
+
+                                    borderColor:
+                                        colors,
+
+                                    borderWidth: 1
+                                }
                             ]
 
                         },
 
                         options: chartOptions
-
                     }
                 );
-
         }
-
     }
-
 }
 
 
@@ -774,7 +840,19 @@ function updateTokenChart(providers) {
 
 
     // ========================================================
-    // ESTIMATED TOKENS
+    // PRODUCTS
+    // ========================================================
+
+    const products =
+        providers.map(
+            provider =>
+                provider.product ||
+                provider.provider
+        );
+
+
+    // ========================================================
+    // TOKENS
     // ========================================================
 
     const tokens =
@@ -783,6 +861,18 @@ function updateTokenChart(providers) {
                 getTokenValue(provider)
         );
 
+
+    // ========================================================
+    // COLOURS
+    // ========================================================
+
+    const colors =
+        getProductColors(products);
+
+
+    // ========================================================
+    // DEBUG
+    // ========================================================
 
     console.log(
         'Token chart data:',
@@ -813,6 +903,12 @@ function updateTokenChart(providers) {
         providerTokenChart.data.datasets[0].data =
             tokens;
 
+        providerTokenChart.data.datasets[0].backgroundColor =
+            colors;
+
+        providerTokenChart.data.datasets[0].borderColor =
+            colors;
+
         providerTokenChart.update('none');
 
         return;
@@ -827,7 +923,6 @@ function updateTokenChart(providers) {
         new Chart(
             canvas,
             {
-
                 type: 'bar',
 
                 data: {
@@ -835,15 +930,20 @@ function updateTokenChart(providers) {
                     labels: labels,
 
                     datasets: [
-
                         {
                             label:
                                 'Estimated Tokens',
 
-                            data:
-                                tokens
-                        }
+                            data: tokens,
 
+                            backgroundColor:
+                                colors,
+
+                            borderColor:
+                                colors,
+
+                            borderWidth: 1
+                        }
                     ]
 
                 },
@@ -860,28 +960,22 @@ function updateTokenChart(providers) {
 
                             callbacks: {
 
-                                label: function(context) {
+                                label:
+                                    function(context) {
 
-                                    return (
-                                        'Estimated Tokens: ' +
-                                        formatNumber(
-                                            context.raw
-                                        )
-                                    );
-
-                                }
-
+                                        return (
+                                            'Estimated Tokens: ' +
+                                            formatNumber(
+                                                context.raw
+                                            )
+                                        );
+                                    }
                             }
-
                         }
-
                     }
-
                 }
-
             }
         );
-
 }
 
 
@@ -955,6 +1049,9 @@ function updateEmployeeProductChart(
         products.map(
             product => {
 
+                const color =
+                    getProductColor(product);
+
                 return {
 
                     label:
@@ -980,12 +1077,17 @@ function updateEmployeeProductChart(
                                         row.interactions
                                     ) || 0
                                     : 0;
-
                             }
-                        )
+                        ),
 
+                    backgroundColor:
+                        color,
+
+                    borderColor:
+                        color,
+
+                    borderWidth: 1
                 };
-
             }
         );
 
@@ -1016,7 +1118,6 @@ function updateEmployeeProductChart(
         new Chart(
             canvas,
             {
-
                 type: 'bar',
 
                 data: {
@@ -1026,7 +1127,6 @@ function updateEmployeeProductChart(
 
                     datasets:
                         datasets
-
                 },
 
                 options: {
@@ -1038,7 +1138,6 @@ function updateEmployeeProductChart(
                         x: {
 
                             stacked: true
-
                         },
 
                         y: {
@@ -1046,16 +1145,11 @@ function updateEmployeeProductChart(
                             beginAtZero: true,
 
                             stacked: true
-
                         }
-
                     }
-
                 }
-
             }
         );
-
 }
 
 
@@ -1208,10 +1302,8 @@ function updateTable(employees) {
             `;
 
             table.appendChild(row);
-
         }
     );
-
 }
 
 
@@ -1259,9 +1351,7 @@ function updateAIStatus(products) {
         }
 
         Connected
-
     `;
-
 }
 
 
@@ -1284,18 +1374,20 @@ function formatProductName(product) {
     if (AI_PRODUCTS[key]) {
 
         return AI_PRODUCTS[key].name;
-
     }
 
 
     return (
+
         String(product)
             .charAt(0)
             .toUpperCase()
-        +
-        String(product).slice(1)
-    );
 
+        +
+
+        String(product)
+            .slice(1)
+    );
 }
 
 
@@ -1309,8 +1401,8 @@ loadDashboard();
 // ============================================================
 // AUTO REFRESH
 // ============================================================
+
 // Refresh every 5 seconds
-// ============================================================
 
 setInterval(
     loadDashboard,
