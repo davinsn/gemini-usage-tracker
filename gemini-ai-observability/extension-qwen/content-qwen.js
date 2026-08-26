@@ -6,7 +6,9 @@ console.log('[qwen-obs] ===============================');
 (() => {
 
     console.log('[qwen-obs] IIFE STARTED');
-    console.log('[qwen-obs] VERSION = DOM-V1 + TOKEN-ESTIMATION');
+    console.log('[qwen-obs] VERSION = API-V2 + TOKEN-ESTIMATION');
+    console.log('[qwen-obs] ACCOUNT DETECTION = QWEN AUTH API ONLY');
+    console.log('[qwen-obs] DOM ACCOUNT DETECTION = DISABLED');
 
     // ============================================================
     // CONFIG
@@ -24,124 +26,211 @@ console.log('[qwen-obs] ===============================');
     }
 
     // ============================================================
-    // EMAIL EXTRACTION
+    // QWEN ACCOUNT API
     // ============================================================
+    //
+    // Confirmed from Qwen Network traffic:
+    //
+    // GET https://chat.qwen.ai/api/v1/auths/
+    //
+    // Example response:
+    //
+    // {
+    //     "id": "...",
+    //     "email": "...",
+    //     "name": "...",
+    //     "role": "user",
+    //     "token": "...",
+    //     ...
+    // }
+    //
+    // We ONLY use the email.
+    //
+    // We DO NOT read, log, store, or transmit the JWT token.
+    // ============================================================
+
+    const QWEN_AUTH_ENDPOINT =
+        '/api/v1/auths/';
 
     const EMAIL_REGEX =
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    const extractEmail = (value) => {
+    // ============================================================
+    // EXTRACT EMAIL FROM AUTH API RESPONSE
+    // ============================================================
 
-        if (typeof value !== 'string') {
+    const extractEmailFromAuthResponse = (data) => {
+
+        if (!data || typeof data !== 'object') {
             return null;
         }
 
-        const matches = value.match(
-            /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
-        );
+        const candidate =
+            data.email;
 
-        if (!matches) {
+        if (typeof candidate !== 'string') {
             return null;
         }
 
-        for (const match of matches) {
+        const email =
+            candidate.trim().toLowerCase();
 
-            const email =
-                match.trim().toLowerCase();
-
-            if (EMAIL_REGEX.test(email)) {
-                return email;
-            }
+        if (!EMAIL_REGEX.test(email)) {
+            return null;
         }
 
-        return null;
+        return email;
     };
 
     // ============================================================
-    // QWEN ACCOUNT DETECTION
+    // FETCH QWEN ACCOUNT
     // ============================================================
 
-    const detectQwenAccountEmail = () => {
+    const fetchQwenAccount = async () => {
 
         console.log(
-            '[qwen-obs] Searching for Qwen account...'
+            '[qwen-obs] ================================='
         );
 
-        // --------------------------------------------------------
-        // Search visible DOM attributes/text for an email
-        // --------------------------------------------------------
+        console.log(
+            '[qwen-obs] STARTING QWEN ACCOUNT DETECTION'
+        );
 
-        const elements = [
-            ...document.querySelectorAll(
-                '[aria-label], [title], [data-tooltip], button, a'
-            )
-        ];
+        console.log(
+            '[qwen-obs] METHOD: QWEN AUTH API'
+        );
 
-        for (const element of elements) {
+        console.log(
+            '[qwen-obs] ENDPOINT:',
+            QWEN_AUTH_ENDPOINT
+        );
 
-            const values = [
-                element.getAttribute('aria-label'),
-                element.getAttribute('title'),
-                element.getAttribute('data-tooltip'),
-                element.textContent
-            ];
+        console.log(
+            '[qwen-obs] DOM ACCOUNT DETECTION: DISABLED'
+        );
 
-            for (const value of values) {
+        console.log(
+            '[qwen-obs] ================================='
+        );
 
-                const email =
-                    extractEmail(value);
+        try {
 
-                if (email) {
+            console.log(
+                '[qwen-obs] Requesting authenticated Qwen account...'
+            );
 
-                    console.log(
-                        '[qwen-obs] QWEN ACCOUNT DETECTED:',
-                        email
-                    );
-
-                    return email;
-                }
-            }
-        }
-
-        // --------------------------------------------------------
-        // Search dialogs / menus
-        // --------------------------------------------------------
-
-        const menuElements = [
-            ...document.querySelectorAll(
-                '[role="menu"] *, ' +
-                '[role="dialog"] *, ' +
-                '[data-radix-menu-content] *, ' +
-                '[class*="account" i] *, ' +
-                '[class*="profile" i] *'
-            )
-        ];
-
-        for (const element of menuElements) {
-
-            const text =
-                element.textContent?.trim() || '';
-
-            const email =
-                extractEmail(text);
-
-            if (email) {
-
-                console.log(
-                    '[qwen-obs] Account detected from menu:',
-                    email
+            const response =
+                await fetch(
+                    QWEN_AUTH_ENDPOINT,
+                    {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    }
                 );
 
-                return email;
+            console.log(
+                '[qwen-obs] Qwen auth API status:',
+                response.status
+            );
+
+            if (!response.ok) {
+
+                console.error(
+                    '[qwen-obs] Qwen auth API request failed:',
+                    response.status,
+                    response.statusText
+                );
+
+                return null;
             }
+
+            const contentType =
+                response.headers.get('content-type') || '';
+
+            console.log(
+                '[qwen-obs] Content-Type:',
+                contentType
+            );
+
+            if (!contentType.includes('application/json')) {
+
+                console.error(
+                    '[qwen-obs] Qwen auth API did not return JSON'
+                );
+
+                return null;
+            }
+
+            const data =
+                await response.json();
+
+            // IMPORTANT:
+            // Do NOT console.log(data).
+            //
+            // The response contains a JWT token.
+            // Logging the entire object would expose it.
+            //
+            console.log(
+                '[qwen-obs] Qwen auth response received'
+            );
+
+            const email =
+                extractEmailFromAuthResponse(data);
+
+            if (!email) {
+
+                console.error(
+                    '[qwen-obs] QWEN ACCOUNT NOT DETECTED'
+                );
+
+                console.error(
+                    '[qwen-obs] Auth API response did not contain a valid email'
+                );
+
+                return null;
+            }
+
+            console.log(
+                '[qwen-obs] ================================='
+            );
+
+            console.log(
+                '[qwen-obs] QWEN ACCOUNT DETECTED'
+            );
+
+            console.log(
+                '[qwen-obs] Employee:',
+                email
+            );
+
+            console.log(
+                '[qwen-obs] ================================='
+            );
+
+            return email;
+
+        } catch (error) {
+
+            console.error(
+                '[qwen-obs] QWEN AUTH API ERROR:',
+                error
+            );
+
+            return null;
         }
-
-        console.log(
-            '[qwen-obs] No Qwen account email found yet.'
-        );
-
-        return null;
     };
+
+    // ============================================================
+    // ACCOUNT STATE
+    // ============================================================
+
+    let employeeEmail = null;
+
+    let collectorInitialized =
+        false;
 
     // ============================================================
     // TOKEN ESTIMATION
@@ -157,320 +246,15 @@ console.log('[qwen-obs] ===============================');
          * Rough token estimate.
          *
          * Approximation:
-         * ~1 token per 4 characters for typical English text.
+         * ~1 token per 4 characters.
          *
-         * This is NOT an official tokenizer.
+         * This is NOT an official Qwen tokenizer.
          * It is intended for usage estimation only.
          */
 
-        return Math.ceil(text.length / 4);
-    };
-
-    // ============================================================
-    // ACCOUNT STATE
-    // ============================================================
-
-    let employeeEmail = null;
-    let collectorInitialized = false;
-
-    // ============================================================
-    // ACCOUNT DETECTION VIA SESSION API (PREFERRED, IF FOUND)
-    // ============================================================
-    // Unlike ChatGPT (which has a well-documented internal session
-    // endpoint at /api/auth/session via next-auth), Qwen Chat's
-    // equivalent endpoint has NOT been confirmed here. The
-    // candidates below are reasonable guesses based on common SPA
-    // session-endpoint naming conventions, tried in order.
-    //
-    // TO CONFIRM THE REAL ENDPOINT: open chat.qwen.ai while logged
-    // in, open DevTools -> Network -> XHR/Fetch, reload, and search
-    // response bodies for your own email address. Replace/reorder
-    // the candidates below once you find the real one — a single
-    // confirmed endpoint is always more reliable than guessing.
-    //
-    // If none of these candidates work, this silently falls back
-    // to DOM scraping, so nothing breaks — it's just less reliable.
-    // ============================================================
-
-    const SESSION_API_CANDIDATES = [
-        '/api/auth/session',
-        '/api/v1/users/me',
-        '/api/user',
-        '/api/user/profile'
-    ];
-
-    const extractEmailFromSessionPayload = (data) => {
-
-        const candidates = [
-            data?.user?.email,
-            data?.email,
-            data?.data?.email,
-            data?.data?.user?.email
-        ];
-
-        for (const candidate of candidates) {
-
-            if (typeof candidate !== 'string') {
-                continue;
-            }
-
-            const email = candidate.trim().toLowerCase();
-
-            if (EMAIL_REGEX.test(email)) {
-                return email;
-            }
-        }
-
-        return null;
-    };
-
-    const fetchAccountEmailFromSessionApi = async () => {
-
-        for (const endpoint of SESSION_API_CANDIDATES) {
-
-            try {
-
-                const response = await fetch(
-                    endpoint,
-                    {
-                        credentials: 'include',
-                        headers: {
-                            'Accept': 'application/json'
-                        }
-                    }
-                );
-
-                if (!response.ok) {
-                    continue;
-                }
-
-                const contentType =
-                    response.headers.get('content-type') || '';
-
-                if (!contentType.includes('application/json')) {
-                    continue;
-                }
-
-                const data = await response.json();
-
-                const email =
-                    extractEmailFromSessionPayload(data);
-
-                if (email) {
-
-                    console.log(
-                        '[qwen-obs] Account detected via session API:',
-                        endpoint,
-                        email
-                    );
-
-                    return email;
-                }
-
-            } catch (error) {
-
-                console.warn(
-                    '[qwen-obs] Session API candidate failed:',
-                    endpoint,
-                    error
-                );
-            }
-        }
-
-        return null;
-    };
-
-    // ============================================================
-    // WAIT FOR ACCOUNT
-    // ============================================================
-
-    let accountObserver = null;
-    let accountDetectionStarted = false;
-
-    const handleDetectedAccount = (detectedEmail) => {
-
-        if (!detectedEmail) {
-            return;
-        }
-
-        const normalizedEmail =
-            detectedEmail.toLowerCase().trim();
-
-        // Already detected
-        if (employeeEmail === normalizedEmail) {
-            return;
-        }
-
-        employeeEmail = normalizedEmail;
-
-        console.log(
-            '[qwen-obs] ================================='
+        return Math.ceil(
+            text.length / 4
         );
-
-        console.log(
-            '[qwen-obs] REAL QWEN ACCOUNT DETECTED'
-        );
-
-        console.log(
-            '[qwen-obs] Employee:',
-            employeeEmail
-        );
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        // Stop watching once we know the account
-        if (accountObserver) {
-
-            accountObserver.disconnect();
-
-            accountObserver = null;
-        }
-
-        initializeCollector();
-    };
-
-    const detectAccountImmediately = () => {
-
-        console.log(
-            '[qwen-obs] Checking Qwen account immediately...'
-        );
-
-        const detectedEmail =
-            detectQwenAccountEmail();
-
-        if (detectedEmail) {
-
-            handleDetectedAccount(
-                detectedEmail
-            );
-
-            return true;
-        }
-
-        return false;
-    };
-
-    const startDomAccountDetection = () => {
-
-        console.log(
-            '[qwen-obs] Starting DOM-based account detection...'
-        );
-
-        // ========================================================
-        // FIRST CHECK — DO NOT WAIT
-        // ========================================================
-
-        if (detectAccountImmediately()) {
-            return;
-        }
-
-        console.log(
-            '[qwen-obs] Account not present yet.'
-        );
-
-        console.log(
-            '[qwen-obs] Watching DOM for account information...'
-        );
-
-        // ========================================================
-        // WATCH DOM
-        // ========================================================
-
-        accountObserver =
-            new MutationObserver(() => {
-
-                // Don't keep searching after account is found
-                if (employeeEmail) {
-                    return;
-                }
-
-                const detectedEmail =
-                    detectQwenAccountEmail();
-
-                if (detectedEmail) {
-
-                    handleDetectedAccount(
-                        detectedEmail
-                    );
-                }
-            });
-
-        const startObserver = () => {
-
-            if (!document.documentElement) {
-
-                requestAnimationFrame(
-                    startObserver
-                );
-
-                return;
-            }
-
-            accountObserver.observe(
-                document.documentElement,
-                {
-                    childList: true,
-                    subtree: true,
-                    characterData: true,
-                    attributes: true
-                }
-            );
-
-            // Check once more after observer is attached
-            detectAccountImmediately();
-        };
-
-        startObserver();
-    };
-
-    const waitForQwenAccount = () => {
-
-        if (accountDetectionStarted) {
-            return;
-        }
-
-        accountDetectionStarted = true;
-
-        console.log(
-            '[qwen-obs] Trying session API first...'
-        );
-
-        // ========================================================
-        // TRY SESSION API FIRST
-        // ========================================================
-        // If this succeeds, we skip DOM scraping entirely — no
-        // need to wait for menus/tooltips to render.
-        // ========================================================
-
-        fetchAccountEmailFromSessionApi()
-            .then(apiEmail => {
-
-                if (apiEmail) {
-
-                    handleDetectedAccount(apiEmail);
-
-                    return;
-                }
-
-                console.log(
-                    '[qwen-obs] Session API did not return an email. ' +
-                    'Falling back to DOM detection.'
-                );
-
-                startDomAccountDetection();
-            })
-            .catch(error => {
-
-                console.warn(
-                    '[qwen-obs] Session API lookup threw unexpectedly. ' +
-                    'Falling back to DOM detection.',
-                    error
-                );
-
-                startDomAccountDetection();
-            });
     };
 
     // ============================================================
@@ -483,6 +267,15 @@ console.log('[qwen-obs] ===============================');
 
             console.warn(
                 '[qwen-obs] Collector already initialized'
+            );
+
+            return;
+        }
+
+        if (!employeeEmail) {
+
+            console.error(
+                '[qwen-obs] Collector cannot start: no employee email'
             );
 
             return;
@@ -506,16 +299,29 @@ console.log('[qwen-obs] ===============================');
         let completionTimer = null;
 
         // Prevent Enter + Send button from firing twice
+
         let lastInteractionStartedAt = 0;
 
         console.log(
-            '[qwen-obs] Tracking employee:',
+            '[qwen-obs] ================================='
+        );
+
+        console.log(
+            '[qwen-obs] INITIALIZING QWEN COLLECTOR'
+        );
+
+        console.log(
+            '[qwen-obs] Employee:',
             employeeEmail
         );
 
         console.log(
             '[qwen-obs] Session:',
             sessionId
+        );
+
+        console.log(
+            '[qwen-obs] ================================='
         );
 
         // ========================================================
@@ -666,7 +472,6 @@ console.log('[qwen-obs] ===============================');
                     );
                 });
 
-            // Prefer the Qwen composer
             const composer =
                 visible.find(el =>
                     el.tagName === 'TEXTAREA' ||
@@ -709,11 +514,13 @@ console.log('[qwen-obs] ===============================');
 
         const startInteraction = () => {
 
-            const now = Date.now();
+            const now =
+                Date.now();
 
-            // Prevent Enter + Send click from creating two events
             if (
-                now - lastInteractionStartedAt < 500
+                now -
+                lastInteractionStartedAt <
+                500
             ) {
 
                 console.log(
@@ -723,21 +530,20 @@ console.log('[qwen-obs] ===============================');
                 return;
             }
 
-            lastInteractionStartedAt = now;
+            lastInteractionStartedAt =
+                now;
 
             const input =
                 findPromptInput();
 
             let prompt = '';
 
-            // Try live input
             if (input) {
 
                 prompt =
                     getInputText(input).trim();
             }
 
-            // Fallback to cached prompt
             if (!prompt) {
 
                 prompt =
@@ -771,10 +577,6 @@ console.log('[qwen-obs] ===============================');
                 prompt.length
             );
 
-            // ====================================================
-            // ESTIMATE PROMPT TOKENS
-            // ====================================================
-
             const promptTokens =
                 estimateTokens(prompt);
 
@@ -790,7 +592,6 @@ console.log('[qwen-obs] ===============================');
             const signature =
                 `${prompt.length}:${prompt}`;
 
-            // Same interaction already active
             if (
                 activeInteraction &&
                 activeInteraction.signature === signature
@@ -803,7 +604,6 @@ console.log('[qwen-obs] ===============================');
                 return;
             }
 
-            // Same prompt already completed
             if (
                 signature === lastPromptSignature &&
                 !activeInteraction
@@ -859,7 +659,7 @@ console.log('[qwen-obs] ===============================');
                 metadata: {
 
                     collector:
-                        'dom-v1',
+                        'api-v2',
 
                     prompt_capture:
                         'pre-submit',
@@ -869,7 +669,6 @@ console.log('[qwen-obs] ===============================');
                 }
             });
 
-            // Clear cached prompt
             lastKnownPrompt = '';
         };
 
@@ -879,25 +678,28 @@ console.log('[qwen-obs] ===============================');
 
         const getQwenResponseText = () => {
 
-            // Qwen Chat does not expose a stable
-            // `data-message-author-role`-style attribute like
-            // ChatGPT does, so we try several candidate selectors
-            // in order of specificity. These may need to be
-            // re-verified against the live DOM if Qwen changes
-            // its markup.
             const selectorCandidates = [
+
                 '[data-message-author-role="assistant"]',
+
                 '[class*="assistant" i] [class*="markdown" i]',
+
                 '[class*="response" i] [class*="markdown" i]',
+
                 '[class*="markdown" i]'
             ];
 
             let candidates = [];
 
-            for (const selector of selectorCandidates) {
+            for (
+                const selector
+                of selectorCandidates
+            ) {
 
                 candidates = [
-                    ...document.querySelectorAll(selector)
+                    ...document.querySelectorAll(
+                        selector
+                    )
                 ];
 
                 if (candidates.length) {
@@ -922,7 +724,9 @@ console.log('[qwen-obs] ===============================');
             }
 
             const latest =
-                visible[visible.length - 1];
+                visible[
+                    visible.length - 1
+                ];
 
             return (
                 latest.innerText ||
@@ -954,16 +758,8 @@ console.log('[qwen-obs] ===============================');
             const responseLength =
                 response.length;
 
-            // ====================================================
-            // ESTIMATE RESPONSE TOKENS
-            // ====================================================
-
             const responseTokens =
                 estimateTokens(response);
-
-            // ====================================================
-            // ESTIMATE TOTAL TOKENS
-            // ====================================================
 
             const totalTokens =
                 interaction.promptTokens +
@@ -1032,7 +828,7 @@ console.log('[qwen-obs] ===============================');
                 metadata: {
 
                     collector:
-                        'dom-v1',
+                        'api-v2',
 
                     completion_detection:
                         'mutation-idle',
@@ -1074,7 +870,9 @@ console.log('[qwen-obs] ===============================');
                     input &&
                     (
                         event.target === input ||
-                        input.contains?.(event.target)
+                        input.contains?.(
+                            event.target
+                        )
                     );
 
                 if (!targetIsInput) {
@@ -1095,28 +893,34 @@ console.log('[qwen-obs] ===============================');
             event => {
 
                 const button =
-                    event.target?.closest?.('button');
+                    event.target?.closest?.(
+                        'button'
+                    );
 
                 if (!button) {
                     return;
                 }
 
                 const combined = [
+
                     button.getAttribute(
                         'aria-label'
                     ),
+
                     button.getAttribute(
                         'title'
                     ),
+
                     button.innerText
+
                 ]
                     .filter(Boolean)
                     .join(' ');
 
-                // Qwen's submit control label isn't confirmed, so
-                // broaden the match beyond just "Send".
                 const isSend =
-                    /send|submit|ask/i.test(combined) &&
+                    /send|submit|ask/i.test(
+                        combined
+                    ) &&
                     !button.disabled;
 
                 if (!isSend) {
@@ -1149,7 +953,6 @@ console.log('[qwen-obs] ===============================');
                         const response =
                             getQwenResponseText();
 
-                        // Don't complete until a response exists.
                         if (!response) {
                             return;
                         }
@@ -1183,7 +986,7 @@ console.log('[qwen-obs] ===============================');
             metadata: {
 
                 collector:
-                    'dom-v1',
+                    'api-v2',
 
                 url_host:
                     location.host
@@ -1199,6 +1002,10 @@ console.log('[qwen-obs] ===============================');
         );
 
         console.log(
+            '[qwen-obs] LOGIN CONFIRMED'
+        );
+
+        console.log(
             '[qwen-obs] Employee:',
             employeeEmail
         );
@@ -1209,6 +1016,16 @@ console.log('[qwen-obs] ===============================');
         );
 
         console.log(
+            '[qwen-obs] Account detection:',
+            'QWEN AUTH API'
+        );
+
+        console.log(
+            '[qwen-obs] DOM account detection:',
+            'DISABLED'
+        );
+
+        console.log(
             '[qwen-obs] Token estimation:',
             'ENABLED'
         );
@@ -1216,6 +1033,88 @@ console.log('[qwen-obs] ===============================');
         console.log(
             '[qwen-obs] ================================='
         );
+    };
+
+    // ============================================================
+    // WAIT FOR QWEN ACCOUNT
+    // ============================================================
+
+    const waitForQwenAccount = async () => {
+
+        console.log(
+            '[qwen-obs] ================================='
+        );
+
+        console.log(
+            '[qwen-obs] STARTING QWEN ACCOUNT DETECTION'
+        );
+
+        console.log(
+            '[qwen-obs] METHOD: QWEN AUTH API ONLY'
+        );
+
+        console.log(
+            '[qwen-obs] ENDPOINT:',
+            QWEN_AUTH_ENDPOINT
+        );
+
+        console.log(
+            '[qwen-obs] DOM ACCOUNT DETECTION: DISABLED'
+        );
+
+        console.log(
+            '[qwen-obs] ================================='
+        );
+
+        const detectedEmail =
+            await fetchQwenAccount();
+
+        if (!detectedEmail) {
+
+            console.error(
+                '[qwen-obs] ================================='
+            );
+
+            console.error(
+                '[qwen-obs] LOGIN NOT CONFIRMED'
+            );
+
+            console.error(
+                '[qwen-obs] Collector will NOT start'
+            );
+
+            console.error(
+                '[qwen-obs] ================================='
+            );
+
+            return;
+        }
+
+        employeeEmail =
+            detectedEmail;
+
+        console.log(
+            '[qwen-obs] ================================='
+        );
+
+        console.log(
+            '[qwen-obs] LOGIN CONFIRMED'
+        );
+
+        console.log(
+            '[qwen-obs] Employee:',
+            employeeEmail
+        );
+
+        console.log(
+            '[qwen-obs] Starting collector...'
+        );
+
+        console.log(
+            '[qwen-obs] ================================='
+        );
+
+        initializeCollector();
     };
 
     // ============================================================
