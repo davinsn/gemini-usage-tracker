@@ -846,7 +846,9 @@ app.get(
 app.get(
     '/api/usage/by-employee',
     (req, res) => {
+
         try {
+
             const provider =
                 req.query.provider || null;
 
@@ -855,88 +857,17 @@ app.get(
 
             let rows;
 
+            // ====================================================
+            // PROVIDER + PRODUCT FILTER
+            // ====================================================
+
             if (provider && product) {
 
                 rows = db.prepare(`
                     SELECT
+
                         e.email,
-                        e.department,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                        ) AS interactions,
-
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND u.product = 'gemini'
-                        ) AS gemini,
-
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND u.product = 'chatgpt'
-                        ) AS chatgpt,
-
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND u.product = 'claude'
-                        ) AS claude,
-
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND u.product = 'copilot'
-                        ) AS copilot,
-
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND u.product = 'perplexity'
-                        ) AS perplexity,
-
-                        COUNT(
-                            DISTINCT u.session_id
-                        ) AS sessions,
-
-                        ROUND(
-                            AVG(u.latency_ms)
-                            FILTER (
-                                WHERE u.latency_ms IS NOT NULL
-                            )
-                        ) AS avg_latency_ms,
-                        COALESCE(SUM(u.prompt_tokens), 0) AS prompt_tokens,
-
-                        COALESCE(SUM(u.response_tokens), 0) AS response_tokens,
-
-                        COALESCE(SUM(u.total_tokens), 0) AS total_tokens
-
-                    FROM employees e
-
-                    LEFT JOIN usage_events u
-                        ON u.employee_id = e.id
-                        AND u.provider = ?
-                        AND u.product = ?
-
-                    GROUP BY
-                        e.id,
-                        e.email,
-                        e.department
-
-                    ORDER BY
-                        interactions DESC
-                `).all(
-                    provider,
-                    product
-                );
-
-            } else {
-
-                rows = db.prepare(`
-                    SELECT
-                        e.email,
                         e.department,
 
                         COUNT(u.id) FILTER (
@@ -974,6 +905,12 @@ app.get(
                             AND LOWER(u.product) = 'perplexity'
                         ) AS perplexity,
 
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'qwen'
+                        ) AS qwen,
+
                         COUNT(
                             DISTINCT u.session_id
                         ) AS sessions,
@@ -983,7 +920,124 @@ app.get(
                             FILTER (
                                 WHERE u.latency_ms IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(u.prompt_tokens),
+                            0
+                        ) AS prompt_tokens,
+
+                        COALESCE(
+                            SUM(u.response_tokens),
+                            0
+                        ) AS response_tokens,
+
+                        COALESCE(
+                            SUM(u.total_tokens),
+                            0
+                        ) AS total_tokens
+
+                    FROM employees e
+
+                    LEFT JOIN usage_events u
+                        ON u.employee_id = e.id
+                        AND u.provider = ?
+                        AND u.product = ?
+
+                    GROUP BY
+                        e.id,
+                        e.email,
+                        e.department
+
+                    ORDER BY
+                        interactions DESC
+
+                `).all(
+                    provider,
+                    product
+                );
+
+            }
+
+            // ====================================================
+            // NO FILTER
+            // ====================================================
+
+            else {
+
+                rows = db.prepare(`
+                    SELECT
+
+                        e.email,
+
+                        e.department,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                        ) AS interactions,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'gemini'
+                        ) AS gemini,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'chatgpt'
+                        ) AS chatgpt,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'claude'
+                        ) AS claude,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'copilot'
+                        ) AS copilot,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'perplexity'
+                        ) AS perplexity,
+
+                        COUNT(u.id) FILTER (
+                            WHERE u.event_type =
+                                'interaction_started'
+                            AND LOWER(u.product) = 'qwen'
+                        ) AS qwen,
+
+                        COUNT(
+                            DISTINCT u.session_id
+                        ) AS sessions,
+
+                        ROUND(
+                            AVG(u.latency_ms)
+                            FILTER (
+                                WHERE u.latency_ms IS NOT NULL
+                            )
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(u.prompt_tokens),
+                            0
+                        ) AS prompt_tokens,
+
+                        COALESCE(
+                            SUM(u.response_tokens),
+                            0
+                        ) AS response_tokens,
+
+                        COALESCE(
+                            SUM(u.total_tokens),
+                            0
+                        ) AS total_tokens
 
                     FROM employees e
 
@@ -997,6 +1051,7 @@ app.get(
 
                     ORDER BY
                         interactions DESC
+
                 `).all();
             }
 
