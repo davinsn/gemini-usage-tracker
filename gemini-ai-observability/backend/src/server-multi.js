@@ -1,3 +1,8 @@
+// ============================================================
+// AI OBSERVABILITY - SERVER
+// OpenRouter API + SQLite + BNM USD/MYR
+// ============================================================
+
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
@@ -8,9 +13,17 @@ import { fileURLToPath } from 'url';
 import DatabaseConstructor from 'better-sqlite3';
 import 'dotenv/config';
 
+// ============================================================
+// PATHS
+// ============================================================
+
 const __dirname = path.dirname(
     fileURLToPath(import.meta.url)
 );
+
+// ============================================================
+// APP
+// ============================================================
 
 const app = express();
 
@@ -18,11 +31,11 @@ const port =
     Number(process.env.PORT || 4000);
 
 // ============================================================
-// DEFAULT PROVIDER CONFIGURATION
+// DEFAULT CONFIGURATION
 // ============================================================
 
-const DEFAULT_PROVIDER = 'google';
-const DEFAULT_PRODUCT = 'gemini';
+const DEFAULT_PROVIDER = 'openrouter';
+const DEFAULT_PRODUCT = 'openrouter';
 
 // ============================================================
 // OPENROUTER CONFIGURATION
@@ -34,9 +47,14 @@ const OPENROUTER_API_KEY =
 const OPENROUTER_ENDPOINT =
     'https://openrouter.ai/api/v1/chat/completions';
 
+const OPENROUTER_DEFAULT_MODEL =
+    process.env.OPENROUTER_MODEL ||
+    'qwen/qwen3-30b-a3b';
+
 if (!OPENROUTER_API_KEY) {
+
     console.warn(
-        '[ai-obs] WARNING: OPENROUTER_API_KEY is not set. OpenRouter API requests will fail.'
+        '[ai-obs] WARNING: OPENROUTER_API_KEY is not set.'
     );
 }
 
@@ -69,12 +87,22 @@ const db =
 db.pragma('journal_mode = WAL');
 
 // Initialize database
-db.exec(
-    fs.readFileSync(
-        initSqlPath,
-        'utf8'
-    )
-);
+
+if (fs.existsSync(initSqlPath)) {
+
+    db.exec(
+        fs.readFileSync(
+            initSqlPath,
+            'utf8'
+        )
+    );
+
+} else {
+
+    console.warn(
+        `[ai-obs] WARNING: init.sql not found at ${initSqlPath}`
+    );
+}
 
 // ============================================================
 // MIDDLEWARE
@@ -111,41 +139,58 @@ app.use(
 // HEALTH CHECK
 // ============================================================
 
-app.get('/', (_req, res) => {
-    try {
+app.get(
+    '/',
+    (_req, res) => {
 
-        db.prepare(
-            'SELECT 1'
-        ).get();
+        try {
 
-        res.json({
-            ok: true,
-            service: 'ai-observability-api',
-            db: 'sqlite',
+            db.prepare(
+                'SELECT 1'
+            ).get();
 
-            defaultProvider:
-                DEFAULT_PROVIDER,
+            res.json({
 
-            defaultProduct:
-                DEFAULT_PRODUCT,
+                ok: true,
 
-            openrouter:
-                Boolean(OPENROUTER_API_KEY)
-        });
+                service:
+                    'ai-observability-api',
 
-    } catch (error) {
+                db:
+                    'sqlite',
 
-        console.error(
-            '[ai-obs] HEALTH ERROR:',
-            error
-        );
+                defaultProvider:
+                    DEFAULT_PROVIDER,
 
-        res.status(503).json({
-            ok: false,
-            error: 'database_unavailable'
-        });
+                defaultProduct:
+                    DEFAULT_PRODUCT,
+
+                openrouter:
+                    Boolean(
+                        OPENROUTER_API_KEY
+                    ),
+
+                defaultModel:
+                    OPENROUTER_DEFAULT_MODEL
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] HEALTH ERROR:',
+                error
+            );
+
+            res.status(503).json({
+
+                ok: false,
+
+                error:
+                    'database_unavailable'
+            });
+        }
     }
-});
+);
 
 // ============================================================
 // HELPERS
@@ -217,7 +262,7 @@ function inferOpenRouterProduct(model) {
     if (
         normalized.startsWith('openai/')
     ) {
-        return 'openai';
+        return 'chatgpt';
     }
 
     // Anthropic
@@ -269,12 +314,11 @@ function inferOpenRouterProduct(model) {
         return 'grok';
     }
 
-    // Default
     return 'openrouter';
 }
 
 // ============================================================
-// AUTHENTICATION
+// AUTHENTICATION - LOGIN
 // ============================================================
 
 app.post(
@@ -288,14 +332,16 @@ app.post(
                 password
             } = req.body || {};
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // VALIDATION
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             if (!validEmail(email)) {
 
                 return res.status(400).json({
+
                     success: false,
+
                     error:
                         'A valid email is required'
                 });
@@ -307,15 +353,17 @@ app.post(
             ) {
 
                 return res.status(400).json({
+
                     success: false,
+
                     error:
                         'Password is required'
                 });
             }
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // FIND EMPLOYEE
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             const employee =
                 db.prepare(`
@@ -332,20 +380,24 @@ app.post(
             if (!employee) {
 
                 return res.status(401).json({
+
                     success: false,
+
                     error:
                         'Invalid email or password'
                 });
             }
 
-            // ----------------------------------------------------
-            // CHECK PASSWORD
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // PASSWORD
+            // ------------------------------------------------
 
             if (!employee.password_hash) {
 
                 return res.status(401).json({
+
                     success: false,
+
                     error:
                         'This employee account has no password configured'
                 });
@@ -360,24 +412,33 @@ app.post(
             if (!passwordValid) {
 
                 return res.status(401).json({
+
                     success: false,
+
                     error:
                         'Invalid email or password'
                 });
             }
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // RESPONSE
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
-            res.json({
+            return res.json({
+
                 success: true,
 
                 employee: {
-                    id: employee.id,
-                    email: employee.email,
+
+                    id:
+                        employee.id,
+
+                    email:
+                        employee.email,
+
                     department:
                         employee.department,
+
                     role:
                         employee.role
                 }
@@ -390,9 +451,12 @@ app.post(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 success: false,
-                error: 'login_failed'
+
+                error:
+                    'login_failed'
             });
         }
     }
@@ -400,7 +464,6 @@ app.post(
 
 // ============================================================
 // CURRENT EMPLOYEE
-// NO JWT REQUIRED
 // ============================================================
 
 app.get(
@@ -415,7 +478,9 @@ app.get(
             if (!validEmail(email)) {
 
                 return res.status(400).json({
+
                     success: false,
+
                     error:
                         'A valid email query parameter is required'
                 });
@@ -435,14 +500,18 @@ app.get(
             if (!employee) {
 
                 return res.status(404).json({
+
                     success: false,
+
                     error:
                         'Employee not found'
                 });
             }
 
-            res.json({
+            return res.json({
+
                 success: true,
+
                 employee
             });
 
@@ -453,8 +522,10 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 success: false,
+
                 error:
                     'auth_check_failed'
             });
@@ -463,7 +534,7 @@ app.get(
 );
 
 // ============================================================
-// INSERT EVENT
+// DATABASE INSERT
 // ============================================================
 
 const insertEvent =
@@ -506,10 +577,6 @@ const insertEvent =
         )
     `);
 
-// ============================================================
-// COMPLETE EVENT
-// ============================================================
-
 const completeEvent =
     db.prepare(`
         UPDATE usage_events
@@ -530,12 +597,12 @@ const completeEvent =
     `);
 
 // ============================================================
-// OPENROUTER CHAT API
+// OPENROUTER CHAT
 // ============================================================
 //
 // POST /api/openrouter/chat
 //
-// Example:
+// Body:
 //
 // {
 //     "email": "employee@example.com",
@@ -543,7 +610,7 @@ const completeEvent =
 //     "messages": [
 //         {
 //             "role": "user",
-//             "content": "Hello Qwen"
+//             "content": "Hello"
 //         }
 //     ],
 //     "session_id": "optional-session-id"
@@ -557,6 +624,21 @@ app.post(
 
         try {
 
+            // ------------------------------------------------
+            // API KEY
+            // ------------------------------------------------
+
+            if (!OPENROUTER_API_KEY) {
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error:
+                        'OpenRouter API key is not configured'
+                });
+            }
+
             const {
                 email,
                 model,
@@ -564,63 +646,34 @@ app.post(
                 session_id
             } = req.body || {};
 
-            // ----------------------------------------------------
-            // API KEY
-            // ----------------------------------------------------
-
-            if (!OPENROUTER_API_KEY) {
-
-                return res.status(500).json({
-                    success: false,
-                    error:
-                        'OpenRouter API key is not configured'
-                });
-            }
-
-            // ----------------------------------------------------
-            // EMAIL VALIDATION
-            // ----------------------------------------------------
-
-            if (
-                !email ||
-                typeof email !== 'string'
-            ) {
-
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        'email is required'
-                });
-            }
+            // ------------------------------------------------
+            // EMAIL
+            // ------------------------------------------------
 
             if (!validEmail(email)) {
 
                 return res.status(400).json({
+
                     success: false,
+
                     error:
                         'A valid email is required'
                 });
             }
 
-            // ----------------------------------------------------
-            // MODEL VALIDATION
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // MODEL
+            // ------------------------------------------------
 
-            if (
-                !model ||
-                typeof model !== 'string'
-            ) {
+            const selectedModel =
+                typeof model === 'string' &&
+                model.trim()
+                    ? model.trim()
+                    : OPENROUTER_DEFAULT_MODEL;
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        'model is required'
-                });
-            }
-
-            // ----------------------------------------------------
-            // MESSAGES VALIDATION
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // MESSAGES
+            // ------------------------------------------------
 
             if (
                 !Array.isArray(messages) ||
@@ -628,15 +681,17 @@ app.post(
             ) {
 
                 return res.status(400).json({
+
                     success: false,
+
                     error:
                         'messages must be a non-empty array'
                 });
             }
 
-            // ----------------------------------------------------
-            // FIND EMPLOYEE
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // EMPLOYEE
+            // ------------------------------------------------
 
             const employee =
                 db.prepare(`
@@ -650,30 +705,28 @@ app.post(
             if (!employee) {
 
                 return res.status(404).json({
+
                     success: false,
+
                     error:
                         'Employee not found'
                 });
             }
 
-            // ----------------------------------------------------
-            // INTERACTION ID
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // IDS
+            // ------------------------------------------------
 
             const interactionId =
                 crypto.randomUUID();
-
-            // ----------------------------------------------------
-            // SESSION ID
-            // ----------------------------------------------------
 
             const sessionId =
                 session_id ||
                 crypto.randomUUID();
 
-            // ----------------------------------------------------
-            // PROMPT LENGTH
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // PROMPT
+            // ------------------------------------------------
 
             const promptText =
                 messages
@@ -694,16 +747,16 @@ app.post(
             const promptLength =
                 promptText.length;
 
-            // ----------------------------------------------------
-            // START TIMER
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // TIMER
+            // ------------------------------------------------
 
             const startTime =
                 Date.now();
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // OPENROUTER REQUEST
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             const openRouterResponse =
                 await fetch(
@@ -712,6 +765,7 @@ app.post(
                         method: 'POST',
 
                         headers: {
+
                             'Authorization':
                                 `Bearer ${OPENROUTER_API_KEY}`,
 
@@ -726,7 +780,10 @@ app.post(
                         },
 
                         body: JSON.stringify({
-                            model,
+
+                            model:
+                                selectedModel,
+
                             messages
                         })
                     }
@@ -735,16 +792,12 @@ app.post(
             const data =
                 await openRouterResponse.json();
 
-            // ----------------------------------------------------
-            // LATENCY
-            // ----------------------------------------------------
-
             const latencyMs =
                 Date.now() - startTime;
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // OPENROUTER ERROR
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             if (!openRouterResponse.ok) {
 
@@ -754,7 +807,8 @@ app.post(
                         status:
                             openRouterResponse.status,
 
-                        model,
+                        model:
+                            selectedModel,
 
                         data
                     }
@@ -763,17 +817,21 @@ app.post(
                 return res.status(
                     openRouterResponse.status
                 ).json({
+
                     success: false,
+
                     error:
+                        data?.error?.message ||
                         'OpenRouter request failed',
+
                     details:
                         data
                 });
             }
 
-            // ----------------------------------------------------
-            // RESPONSE MESSAGE
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // RESPONSE
+            // ------------------------------------------------
 
             const responseMessage =
                 data?.choices?.[0]?.message;
@@ -783,50 +841,55 @@ app.post(
                     ? responseMessage.content
                     : '';
 
-            // ----------------------------------------------------
-            // ACTUAL MODEL USED
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // ACTUAL MODEL
+            // ------------------------------------------------
 
             const actualModel =
                 data?.model ||
-                model;
+                selectedModel;
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // PRODUCT
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             const product =
                 inferOpenRouterProduct(
                     actualModel
                 );
 
-            // ----------------------------------------------------
-            // TOKEN USAGE
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // USAGE
+            // ------------------------------------------------
 
             const promptTokens =
                 toNullableNumber(
-                    data?.usage?.prompt_tokens ??
-                    data?.usage?.promptTokens
+                    data?.usage?.prompt_tokens
                 );
 
             const responseTokens =
                 toNullableNumber(
-                    data?.usage?.completion_tokens ??
-                    data?.usage?.completionTokens
+                    data?.usage?.completion_tokens
                 );
 
             const totalTokens =
                 toNullableNumber(
-                    data?.usage?.total_tokens ??
-                    data?.usage?.totalTokens
+                    data?.usage?.total_tokens
+                ) ??
+                (
+                    promptTokens !== null &&
+                    responseTokens !== null
+                        ? promptTokens +
+                          responseTokens
+                        : null
                 );
 
-            // ----------------------------------------------------
-            // ADDITIONAL USAGE DETAILS
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // METADATA
+            // ------------------------------------------------
 
             const usageMetadata = {
+
                 source:
                     'openrouter',
 
@@ -834,7 +897,7 @@ app.post(
                     true,
 
                 requested_model:
-                    model,
+                    selectedModel,
 
                 actual_model:
                     actualModel,
@@ -844,12 +907,13 @@ app.post(
                     null,
 
                 usage:
-                    data?.usage ?? null
+                    data?.usage ??
+                    null
             };
 
-            // ----------------------------------------------------
-            // INSERT EVENT
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // SAVE EVENT
+            // ------------------------------------------------
 
             const result =
                 insertEvent.run({
@@ -901,9 +965,9 @@ app.post(
                         )
                 });
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // LOG
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             console.log(
                 '[ai-obs] OPENROUTER EVENT:',
@@ -923,7 +987,7 @@ app.post(
                         actualModel,
 
                     requested_model:
-                        model,
+                        selectedModel,
 
                     interaction_id:
                         interactionId,
@@ -945,11 +1009,11 @@ app.post(
                 }
             );
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // RESPONSE
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
-            return res.status(200).json({
+            return res.json({
 
                 success: true,
 
@@ -971,6 +1035,7 @@ app.post(
                     responseText,
 
                 usage: {
+
                     prompt_tokens:
                         promptTokens,
 
@@ -996,7 +1061,9 @@ app.post(
             );
 
             return res.status(500).json({
+
                 success: false,
+
                 error:
                     'openrouter_request_failed'
             });
@@ -1005,7 +1072,7 @@ app.post(
 );
 
 // ============================================================
-// EVENT INGESTION
+// GENERIC EVENT INGESTION
 // ============================================================
 
 app.post(
@@ -1035,25 +1102,24 @@ app.post(
                 metadata
             } = body;
 
-            // ----------------------------------------------------
-            // EMAIL VALIDATION
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // EMAIL
+            // ------------------------------------------------
 
-            if (
-                !email ||
-                typeof email !== 'string'
-            ) {
+            if (!validEmail(email)) {
 
                 return res.status(400).json({
+
                     accepted: false,
+
                     error:
-                        'email is required'
+                        'A valid email is required'
                 });
             }
 
-            // ----------------------------------------------------
-            // FIND EMPLOYEE
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // EMPLOYEE
+            // ------------------------------------------------
 
             const employee =
                 db.prepare(`
@@ -1066,24 +1132,18 @@ app.post(
 
             if (!employee) {
 
-                console.error(
-                    '[ai-obs] EMPLOYEE NOT FOUND:',
-                    email
-                );
-
                 return res.status(404).json({
+
                     accepted: false,
+
                     error:
                         'Employee not found'
                 });
             }
 
-            const employeeId =
-                employee.id;
-
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // PROVIDER / PRODUCT
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             const eventProvider =
                 typeof provider === 'string' &&
@@ -1097,9 +1157,9 @@ app.post(
                     ? product.trim().toLowerCase()
                     : DEFAULT_PRODUCT;
 
-            // ----------------------------------------------------
-            // EVENT VALIDATION
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // EVENT TYPE
+            // ------------------------------------------------
 
             if (
                 typeof event_type !== 'string' ||
@@ -1107,32 +1167,40 @@ app.post(
             ) {
 
                 return res.status(400).json({
+
                     accepted: false,
+
                     error:
                         'event_type is required'
                 });
             }
 
+            // ------------------------------------------------
+            // DATE
+            // ------------------------------------------------
+
             if (!occurred_at) {
 
                 return res.status(400).json({
+
                     accepted: false,
+
                     error:
                         'occurred_at is required'
                 });
             }
 
-            // ----------------------------------------------------
+            // ------------------------------------------------
             // INTERACTION ID
-            // ----------------------------------------------------
+            // ------------------------------------------------
 
             const interactionId =
                 interaction_id ||
                 crypto.randomUUID();
 
-            // ----------------------------------------------------
-            // NORMALISE VALUES
-            // ----------------------------------------------------
+            // ------------------------------------------------
+            // NORMALISE
+            // ------------------------------------------------
 
             const latency =
                 toNullableNumber(
@@ -1165,39 +1233,13 @@ app.post(
                 );
 
             const metadataJson =
-                safeMetadata(metadata);
+                safeMetadata(
+                    metadata
+                );
 
-            // ----------------------------------------------------
-            // LOG EVENT
-            // ----------------------------------------------------
-
-            console.log(
-                '[ai-obs] EVENT:',
-                {
-                    employee_id:
-                        employeeId,
-
-                    email:
-                        employee.email,
-
-                    provider:
-                        eventProvider,
-
-                    product:
-                        eventProduct,
-
-                    event_type,
-
-                    session_id,
-
-                    interaction_id:
-                        interactionId
-                }
-            );
-
-            // ====================================================
-            // INTERACTION COMPLETED
-            // ====================================================
+            // ------------------------------------------------
+            // COMPLETED EVENT
+            // ------------------------------------------------
 
             if (
                 event_type ===
@@ -1207,7 +1249,9 @@ app.post(
                 if (!interaction_id) {
 
                     return res.status(400).json({
+
                         accepted: false,
+
                         error:
                             'interaction_id is required for interaction_completed'
                     });
@@ -1217,7 +1261,7 @@ app.post(
                     completeEvent.run({
 
                         employee_id:
-                            employeeId,
+                            employee.id,
 
                         provider:
                             eventProvider,
@@ -1253,10 +1297,6 @@ app.post(
                             metadataJson
                     });
 
-                // ------------------------------------------------
-                // ORIGINAL EVENT NOT FOUND
-                // ------------------------------------------------
-
                 if (
                     result.changes === 0
                 ) {
@@ -1274,7 +1314,7 @@ app.post(
                         event_id: null,
 
                         employee_id:
-                            employeeId,
+                            employee.id,
 
                         email:
                             employee.email,
@@ -1290,10 +1330,6 @@ app.post(
                     });
                 }
 
-                // ------------------------------------------------
-                // GET UPDATED EVENT
-                // ------------------------------------------------
-
                 const updatedEvent =
                     db.prepare(`
                         SELECT id
@@ -1305,13 +1341,13 @@ app.post(
                         ORDER BY id DESC
                         LIMIT 1
                     `).get(
-                        employeeId,
+                        employee.id,
                         eventProvider,
                         eventProduct,
                         interactionId
                     );
 
-                return res.status(200).json({
+                return res.json({
 
                     accepted: true,
 
@@ -1327,7 +1363,7 @@ app.post(
                         null,
 
                     employee_id:
-                        employeeId,
+                        employee.id,
 
                     email:
                         employee.email,
@@ -1340,15 +1376,15 @@ app.post(
                 });
             }
 
-            // ====================================================
+            // ------------------------------------------------
             // NEW EVENT
-            // ====================================================
+            // ------------------------------------------------
 
             const result =
                 insertEvent.run({
 
                     employee_id:
-                        employeeId,
+                        employee.id,
 
                     provider:
                         eventProvider,
@@ -1395,10 +1431,6 @@ app.post(
             const inserted =
                 result.changes === 1;
 
-            // ----------------------------------------------------
-            // RESPONSE
-            // ----------------------------------------------------
-
             return res.status(
                 inserted ? 201 : 200
             ).json({
@@ -1421,7 +1453,7 @@ app.post(
                         : null,
 
                 employee_id:
-                    employeeId,
+                    employee.id,
 
                 email:
                     employee.email,
@@ -1441,7 +1473,9 @@ app.post(
             );
 
             return res.status(500).json({
+
                 accepted: false,
+
                 error:
                     'event_ingestion_failed'
             });
@@ -1450,7 +1484,7 @@ app.post(
 );
 
 // ============================================================
-// OVERALL USAGE SUMMARY
+// USAGE SUMMARY
 // ============================================================
 
 app.get(
@@ -1567,7 +1601,7 @@ app.get(
                     `).get();
             }
 
-            res.json(row);
+            return res.json(row);
 
         } catch (error) {
 
@@ -1576,7 +1610,8 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 error:
                     'summary_failed'
             });
@@ -1600,9 +1635,8 @@ app.get(
             const product =
                 req.query.product || null;
 
-            let rows;
-
             const productCounts = `
+
                 COUNT(u.id) FILTER (
                     WHERE u.event_type =
                         'interaction_completed'
@@ -1643,8 +1677,38 @@ app.get(
                         'interaction_completed'
                     AND LOWER(u.product) =
                         'qwen'
-                ) AS qwen
+                ) AS qwen,
+
+                COUNT(u.id) FILTER (
+                    WHERE u.event_type =
+                        'interaction_completed'
+                    AND LOWER(u.product) =
+                        'deepseek'
+                ) AS deepseek,
+
+                COUNT(u.id) FILTER (
+                    WHERE u.event_type =
+                        'interaction_completed'
+                    AND LOWER(u.product) =
+                        'llama'
+                ) AS llama,
+
+                COUNT(u.id) FILTER (
+                    WHERE u.event_type =
+                        'interaction_completed'
+                    AND LOWER(u.product) =
+                        'mistral'
+                ) AS mistral,
+
+                COUNT(u.id) FILTER (
+                    WHERE u.event_type =
+                        'interaction_completed'
+                    AND LOWER(u.product) =
+                        'grok'
+                ) AS grok
             `;
+
+            let rows;
 
             if (
                 provider &&
@@ -1771,7 +1835,7 @@ app.get(
                     `).all();
             }
 
-            res.json(rows);
+            return res.json(rows);
 
         } catch (error) {
 
@@ -1780,7 +1844,8 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 error:
                     'employee_summary_failed'
             });
@@ -1817,6 +1882,10 @@ app.get(
                                 WHERE event_type =
                                     'interaction_completed'
                             ) AS interactions,
+
+                            COUNT(
+                                DISTINCT employee_id
+                            ) AS active_employees,
 
                             COUNT(
                                 DISTINCT session_id
@@ -1873,6 +1942,10 @@ app.get(
                             ) AS interactions,
 
                             COUNT(
+                                DISTINCT employee_id
+                            ) AS active_employees,
+
+                            COUNT(
                                 DISTINCT session_id
                             ) AS sessions,
 
@@ -1910,7 +1983,7 @@ app.get(
                     `).all();
             }
 
-            res.json(rows);
+            return res.json(rows);
 
         } catch (error) {
 
@@ -1919,7 +1992,8 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 error:
                     'product_summary_failed'
             });
@@ -1994,7 +2068,7 @@ app.get(
                         interactions DESC
                 `).all();
 
-            res.json(rows);
+            return res.json(rows);
 
         } catch (error) {
 
@@ -2003,7 +2077,8 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 error:
                     'provider_summary_failed'
             });
@@ -2012,7 +2087,7 @@ app.get(
 );
 
 // ============================================================
-// USAGE BY PROVIDER + PRODUCT
+// PROVIDER + PRODUCT
 // ============================================================
 
 app.get(
@@ -2078,7 +2153,7 @@ app.get(
                         interactions DESC
                 `).all();
 
-            res.json(rows);
+            return res.json(rows);
 
         } catch (error) {
 
@@ -2087,7 +2162,8 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 error:
                     'provider_product_summary_failed'
             });
@@ -2170,7 +2246,7 @@ app.get(
                         interactions DESC
                 `).all();
 
-            res.json(rows);
+            return res.json(rows);
 
         } catch (error) {
 
@@ -2179,7 +2255,8 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 error:
                     'employee_product_summary_failed'
             });
@@ -2262,7 +2339,7 @@ app.get(
                     LIMIT ?
                 `).all(limit);
 
-            res.json(rows);
+            return res.json(rows);
 
         } catch (error) {
 
@@ -2271,7 +2348,8 @@ app.get(
                 error
             );
 
-            res.status(500).json({
+            return res.status(500).json({
+
                 error:
                     'events_query_failed'
             });
@@ -2280,7 +2358,7 @@ app.get(
 );
 
 // ============================================================
-// BNM USD -> MYR EXCHANGE RATE
+// BNM USD → MYR EXCHANGE RATE
 // ============================================================
 
 app.get(
@@ -2296,6 +2374,7 @@ app.get(
                         method: 'GET',
 
                         headers: {
+
                             'Accept':
                                 'application/vnd.BNM.API.v1+json',
 
@@ -2333,7 +2412,9 @@ app.get(
             if (!rate) {
 
                 return res.status(502).json({
+
                     success: false,
+
                     error:
                         'USD exchange rate unavailable'
                 });
@@ -2368,7 +2449,7 @@ app.get(
                             : null
                     );
 
-            res.json({
+            return res.json({
 
                 success: true,
 
@@ -2424,170 +2505,12 @@ app.get(
                 error
             );
 
-            res.status(502).json({
+            return res.status(502).json({
+
                 success: false,
+
                 error:
                     'bnm_exchange_rate_unavailable'
-            });
-        }
-    }
-);
-
-
-// ============================================================
-// OPENROUTER / QWEN CHAT
-// ============================================================
-
-app.post(
-    '/api/ai/chat',
-    async (req, res) => {
-
-        try {
-
-            if (!OPENROUTER_API_KEY) {
-                return res.status(500).json({
-                    success: false,
-                    error: 'OpenRouter API key is not configured'
-                });
-            }
-
-            const {
-                messages,
-                model
-            } = req.body || {};
-
-            if (
-                !Array.isArray(messages) ||
-                messages.length === 0
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'messages are required'
-                });
-            }
-
-            const selectedModel =
-                model ||
-                OPENROUTER_MODEL;
-
-            const startTime = Date.now();
-
-            const response = await fetch(
-                OPENROUTER_URL,
-                {
-                    method: 'POST',
-
-                    headers: {
-                        'Authorization':
-                            `Bearer ${OPENROUTER_API_KEY}`,
-
-                        'Content-Type':
-                            'application/json',
-
-                        'HTTP-Referer':
-                            'http://localhost:4000',
-
-                        'X-Title':
-                            'AI Observability Tracker'
-                    },
-
-                    body: JSON.stringify({
-                        model: selectedModel,
-                        messages
-                    })
-                }
-            );
-
-            const data = await response.json();
-
-            const latency =
-                Date.now() - startTime;
-
-            if (!response.ok) {
-
-                console.error(
-                    '[ai-obs] OPENROUTER ERROR:',
-                    data
-                );
-
-                return res.status(response.status).json({
-                    success: false,
-                    error:
-                        data?.error?.message ||
-                        'OpenRouter request failed'
-                });
-            }
-
-            const usage =
-                data?.usage || {};
-
-            const promptTokens =
-                usage.prompt_tokens ?? null;
-
-            const responseTokens =
-                usage.completion_tokens ?? null;
-
-            const totalTokens =
-                usage.total_tokens ??
-                (
-                    promptTokens !== null &&
-                    responseTokens !== null
-                        ? promptTokens + responseTokens
-                        : null
-                );
-
-            const assistantMessage =
-                data?.choices?.[0]?.message?.content ??
-                '';
-
-            console.log(
-                '[ai-obs] OPENROUTER SUCCESS:',
-                {
-                    model: selectedModel,
-                    latency,
-                    promptTokens,
-                    responseTokens,
-                    totalTokens
-                }
-            );
-
-            return res.json({
-                success: true,
-
-                model:
-                    data?.model ||
-                    selectedModel,
-
-                response:
-                    assistantMessage,
-
-                usage: {
-                    prompt_tokens:
-                        promptTokens,
-
-                    response_tokens:
-                        responseTokens,
-
-                    total_tokens:
-                        totalTokens
-                },
-
-                latency_ms:
-                    latency,
-
-                raw: data
-            });
-
-        } catch (error) {
-
-            console.error(
-                '[ai-obs] OPENROUTER REQUEST ERROR:',
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                error: 'OpenRouter request failed'
             });
         }
     }
@@ -2602,7 +2525,9 @@ app.use(
     (_req, res) => {
 
         res.status(404).json({
+
             success: false,
+
             error:
                 'API endpoint not found'
         });
@@ -2618,11 +2543,19 @@ app.listen(
     () => {
 
         console.log(
-            '================================='
+            '============================================'
         );
 
         console.log(
-            `[ai-obs] AI observability API listening on http://localhost:${port}`
+            '[ai-obs] AI OBSERVABILITY SERVER'
+        );
+
+        console.log(
+            '============================================'
+        );
+
+        console.log(
+            `[ai-obs] Server: http://localhost:${port}`
         );
 
         console.log(
@@ -2642,11 +2575,19 @@ app.listen(
         );
 
         console.log(
+            `[ai-obs] Default model: ${OPENROUTER_DEFAULT_MODEL}`
+        );
+
+        console.log(
             `[ai-obs] SQLite: ${dbPath}`
         );
 
         console.log(
-            '================================='
+            '[ai-obs] BNM USD/MYR: ENABLED'
+        );
+
+        console.log(
+            '============================================'
         );
     }
 );
