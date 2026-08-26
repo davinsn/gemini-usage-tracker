@@ -129,9 +129,31 @@ console.log('[qwen-obs] ===============================');
 
         currentQwenModel = detectedModel;
 
-        console.log(
-            '[qwen-obs] ================================='
-        );
+/*
+ * If an interaction is already being tracked,
+ * update its model as soon as the network detector
+ * discovers it.
+ */
+if (
+    typeof activeInteraction !== 'undefined' &&
+    activeInteraction &&
+    (
+        !activeInteraction.model ||
+        activeInteraction.model === 'unknown'
+    )
+) {
+    activeInteraction.model =
+        detectedModel;
+
+    console.log(
+        '[qwen-obs] Active interaction model updated:',
+        detectedModel
+    );
+}
+
+console.log(
+    '[qwen-obs] ================================='
+);
 
         console.log(
             '[qwen-obs] QWEN MODEL AUTO-DETECTED'
@@ -651,157 +673,242 @@ console.log('[qwen-obs] ===============================');
         // START INTERACTION
         // ========================================================
 
-        const startInteraction = () => {
+const startInteraction = () => {
+    const now = Date.now();
 
-            const now = Date.now();
+    /*
+     * Prevent Enter + Send button
+     * from creating two interactions.
+     */
+    if (
+        now -
+        lastInteractionStartedAt <
+        500
+    ) {
+        console.log(
+            '[qwen-obs] Duplicate submit ignored'
+        );
+        return;
+    }
+
+    lastInteractionStartedAt = now;
+
+    const input =
+        findPromptInput();
+
+    let prompt = '';
+
+    if (input) {
+        prompt =
+            getInputText(input).trim();
+    }
+
+    if (!prompt) {
+        prompt =
+            lastKnownPrompt;
+    }
+
+    if (!prompt) {
+        console.warn(
+            '[qwen-obs] Could not capture prompt'
+        );
+        return;
+    }
+
+    /*
+     * Capture whatever response existed before
+     * this interaction.
+     */
+    previousResponseSnapshot =
+        getQwenResponseText();
+
+    console.log(
+        '[qwen-obs] ================================='
+    );
+
+    console.log(
+        '[qwen-obs] PROMPT CAPTURED'
+    );
+
+    console.log(
+        '[qwen-obs] Prompt length:',
+        prompt.length
+    );
+
+    const promptTokens =
+        estimateTokens(prompt);
+
+    console.log(
+        '[qwen-obs] Estimated prompt tokens:',
+        promptTokens
+    );
+
+    console.log(
+        '[qwen-obs] Current model before network detection:',
+        currentQwenModel
+    );
+
+    console.log(
+        '[qwen-obs] ================================='
+    );
+
+    const signature =
+        `${prompt.length}:${prompt}`;
+
+    if (
+        activeInteraction &&
+        activeInteraction.signature === signature
+    ) {
+        console.log(
+            '[qwen-obs] Duplicate interaction ignored'
+        );
+        return;
+    }
+
+    if (
+        signature === lastPromptSignature &&
+        !activeInteraction
+    ) {
+        console.log(
+            '[qwen-obs] Same prompt already processed'
+        );
+        return;
+    }
+
+    lastPromptSignature =
+        signature;
+
+    const interactionId =
+        crypto.randomUUID();
+
+    const startedAt =
+        Date.now();
+
+    /*
+     * Store the interaction immediately.
+     *
+     * The model may still be unknown at this point.
+     * We will wait for the Qwen network detector
+     * before sending interaction_started.
+     */
+    activeInteraction = {
+        interactionId,
+        startedAt,
+        signature,
+        prompt,
+        model: currentQwenModel || 'unknown',
+        promptLength:
+            prompt.length,
+        promptTokens:
+            promptTokens,
+        previousResponse:
+            previousResponseSnapshot
+    };
+
+    /*
+     * Wait for the network detector to identify
+     * the actual Qwen model.
+     */
+    const waitForModelAndSend = () => {
+
+        const maxWait = 1500;
+        const checkInterval = 50;
+
+        const waitStartedAt =
+            Date.now();
+
+        const checkModel = () => {
 
             /*
-             * Prevent Enter + Send button
-             * from creating two interactions.
+             * If the network detector has already
+             * identified the model, use it.
              */
-
             if (
-                now -
-                lastInteractionStartedAt <
-                500
+                currentQwenModel &&
+                currentQwenModel !== 'unknown'
             ) {
 
+                activeInteraction.model =
+                    currentQwenModel;
+
                 console.log(
-                    '[qwen-obs] Duplicate submit ignored'
+                    '[qwen-obs] Model available before event:',
+                    currentQwenModel
                 );
+
+                send({
+                    event_type:
+                        'interaction_started',
+
+                    interaction_id:
+                        interactionId,
+
+                    model:
+                        currentQwenModel,
+
+                    prompt_length:
+                        prompt.length,
+
+                    prompt_tokens:
+                        promptTokens,
+
+                    metadata: {
+                        collector:
+                            'api-v3',
+
+                        prompt_capture:
+                            'pre-submit',
+
+                        model_detection:
+                            'qwen-network',
+
+                        token_estimation:
+                            'characters-divided-by-4'
+                    }
+                });
+
+                lastKnownPrompt = '';
 
                 return;
             }
 
-            lastInteractionStartedAt = now;
+            /*
+             * Wait until the timeout.
+             */
+            if (
+                Date.now() -
+                waitStartedAt <
+                maxWait
+            ) {
 
-            const input =
-                findPromptInput();
-
-            let prompt = '';
-
-            if (input) {
-
-                prompt =
-                    getInputText(input).trim();
-            }
-
-            if (!prompt) {
-
-                prompt =
-                    lastKnownPrompt;
-            }
-
-            if (!prompt) {
-
-                console.warn(
-                    '[qwen-obs] Could not capture prompt'
+                setTimeout(
+                    checkModel,
+                    checkInterval
                 );
 
                 return;
             }
 
             /*
-             * Capture whatever response existed before
-             * this interaction.
+             * Network detector did not provide
+             * a model in time.
              */
-
-            previousResponseSnapshot =
-                getQwenResponseText();
-
-            console.log(
-                '[qwen-obs] ================================='
-            );
-
-            console.log(
-                '[qwen-obs] PROMPT CAPTURED'
-            );
-
-            console.log(
-                '[qwen-obs] Prompt length:',
-                prompt.length
-            );
-
-            const model =
+            const fallbackModel =
                 currentQwenModel || 'unknown';
 
-            console.log(
-                '[qwen-obs] Model:',
-                model
+            activeInteraction.model =
+                fallbackModel;
+
+            console.warn(
+                '[qwen-obs] Model detection timeout'
             );
 
-            const promptTokens =
-                estimateTokens(prompt);
-
-            console.log(
-                '[qwen-obs] Estimated prompt tokens:',
-                promptTokens
+            console.warn(
+                '[qwen-obs] Using model:',
+                fallbackModel
             );
-
-            console.log(
-                '[qwen-obs] ================================='
-            );
-
-            const signature =
-                `${prompt.length}:${prompt}`;
-
-            if (
-                activeInteraction &&
-                activeInteraction.signature === signature
-            ) {
-
-                console.log(
-                    '[qwen-obs] Duplicate interaction ignored'
-                );
-
-                return;
-            }
-
-            if (
-                signature === lastPromptSignature &&
-                !activeInteraction
-            ) {
-
-                console.log(
-                    '[qwen-obs] Same prompt already processed'
-                );
-
-                return;
-            }
-
-            lastPromptSignature =
-                signature;
-
-            const interactionId =
-                crypto.randomUUID();
-
-            const startedAt =
-                Date.now();
-
-            activeInteraction = {
-
-                interactionId,
-
-                startedAt,
-
-                signature,
-
-                prompt,
-
-                model,
-
-                promptLength:
-                    prompt.length,
-
-                promptTokens:
-                    promptTokens,
-
-                previousResponse:
-                    previousResponseSnapshot
-            };
 
             send({
-
                 event_type:
                     'interaction_started',
 
@@ -809,7 +916,7 @@ console.log('[qwen-obs] ===============================');
                     interactionId,
 
                 model:
-                    model,
+                    fallbackModel,
 
                 prompt_length:
                     prompt.length,
@@ -818,12 +925,16 @@ console.log('[qwen-obs] ===============================');
                     promptTokens,
 
                 metadata: {
-
                     collector:
                         'api-v3',
 
                     prompt_capture:
                         'pre-submit',
+
+                    model_detection:
+                        fallbackModel === 'unknown'
+                            ? 'timeout'
+                            : 'qwen-network',
 
                     token_estimation:
                         'characters-divided-by-4'
@@ -832,6 +943,12 @@ console.log('[qwen-obs] ===============================');
 
             lastKnownPrompt = '';
         };
+
+        checkModel();
+    };
+
+    waitForModelAndSend();
+};
 
         // ========================================================
         // COMPLETE INTERACTION

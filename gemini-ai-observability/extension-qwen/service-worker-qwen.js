@@ -7,9 +7,7 @@ const API_BASE_URL = 'http://localhost:4000';
 // ============================================================
 
 chrome.runtime.onInstalled.addListener(() => {
-    console.log(
-        '[qwen-obs] Extension installed/updated'
-    );
+    console.log('[qwen-obs] Extension installed/updated');
 });
 
 // ============================================================
@@ -19,27 +17,11 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener(
     (message, sender, sendResponse) => {
 
-        console.log(
-            '[qwen-obs] ==============================='
-        );
-
-        console.log(
-            '[qwen-obs] MESSAGE RECEIVED'
-        );
-
-        console.log(
-            '[qwen-obs] Message type:',
-            message?.type
-        );
-
-        console.log(
-            '[qwen-obs] Sender tab:',
-            sender?.tab?.id
-        );
-
-        console.log(
-            '[qwen-obs] ==============================='
-        );
+        console.log('[qwen-obs] ===============================');
+        console.log('[qwen-obs] MESSAGE RECEIVED');
+        console.log('[qwen-obs] Message type:', message?.type);
+        console.log('[qwen-obs] Sender tab:', sender?.tab?.id);
+        console.log('[qwen-obs] ===============================');
 
         // --------------------------------------------------------
         // Validate message
@@ -62,10 +44,7 @@ chrome.runtime.onMessage.addListener(
         // ONLY ACCEPT QWEN USAGE EVENTS
         // ========================================================
 
-        if (
-            message.type !==
-            'QWEN_USAGE_EVENT'
-        ) {
+        if (message.type !== 'QWEN_USAGE_EVENT') {
 
             console.warn(
                 '[qwen-obs] Ignoring unrelated message:',
@@ -87,6 +66,7 @@ chrome.runtime.onMessage.addListener(
         const event = message.event;
 
         if (!event) {
+
             console.error(
                 '[qwen-obs] REJECTED: event is missing'
             );
@@ -100,7 +80,7 @@ chrome.runtime.onMessage.addListener(
         }
 
         // ========================================================
-        // GET QWEN ACCOUNT EMAIL
+        // EMAIL
         // ========================================================
 
         const detectedEmail =
@@ -132,7 +112,7 @@ chrome.runtime.onMessage.addListener(
         }
 
         // ========================================================
-        // HARD-CODE QWEN PROVIDER
+        // PROVIDER / PRODUCT
         // ========================================================
 
         const provider = 'alibaba';
@@ -142,8 +122,7 @@ chrome.runtime.onMessage.addListener(
         // EVENT TYPE
         // ========================================================
 
-        const eventType =
-            event.event_type;
+        const eventType = event.event_type;
 
         if (!eventType) {
 
@@ -173,15 +152,13 @@ chrome.runtime.onMessage.addListener(
 
         const payload = {
 
-            // IMPORTANT:
-            // Backend now identifies the employee by email.
             email: detectedEmail,
 
             provider,
+
             product,
 
-            event_type:
-                eventType,
+            event_type: eventType,
 
             session_id:
                 event.session_id ?? null,
@@ -204,10 +181,6 @@ chrome.runtime.onMessage.addListener(
             response_length:
                 event.response_length ?? null,
 
-            // ====================================================
-            // TOKEN ESTIMATES
-            // ====================================================
-
             prompt_tokens:
                 event.prompt_tokens ?? null,
 
@@ -217,12 +190,7 @@ chrome.runtime.onMessage.addListener(
             total_tokens:
                 event.total_tokens ?? null,
 
-            // ====================================================
-            // METADATA
-            // ====================================================
-
             metadata: {
-
                 ...(event.metadata || {}),
 
                 extension:
@@ -250,97 +218,67 @@ chrome.runtime.onMessage.addListener(
         };
 
         // ========================================================
-        // LOG FINAL PAYLOAD
+        // IMPORTANT DEBUG LOGGING
         // ========================================================
 
-        console.log(
-            '[qwen-obs] ==============================='
-        );
-
-        console.log(
-            '[qwen-obs] FINAL BACKEND PAYLOAD'
-        );
-
-        console.log(
-            '[qwen-obs] Employee Email:',
-            payload.email
-        );
-
-        console.log(
-            '[qwen-obs] Provider:',
-            payload.provider
-        );
-
-        console.log(
-            '[qwen-obs] Product:',
-            payload.product
-        );
-
-        console.log(
-            '[qwen-obs] Event:',
-            payload.event_type
-        );
-
-        console.log(
-            '[qwen-obs] Session:',
-            payload.session_id
-        );
-
-        console.log(
-            '[qwen-obs] Interaction:',
-            payload.interaction_id
-        );
-
-        console.log(
-            '[qwen-obs] Model:',
-            payload.model
-        );
-
-        console.log(
-            '[qwen-obs] ==============================='
-        );
+        console.log('[qwen-obs] ===============================');
+        console.log('[qwen-obs] FINAL BACKEND PAYLOAD');
+        console.log('[qwen-obs] Event:', payload.event_type);
+        console.log('[qwen-obs] Email:', payload.email);
+        console.log('[qwen-obs] Provider:', payload.provider);
+        console.log('[qwen-obs] Product:', payload.product);
+        console.log('[qwen-obs] Session:', payload.session_id);
+        console.log('[qwen-obs] Interaction:', payload.interaction_id);
+        console.log('[qwen-obs] Model:', payload.model);
+        console.log('[qwen-obs] Latency:', payload.latency_ms);
+        console.log('[qwen-obs] Prompt tokens:', payload.prompt_tokens);
+        console.log('[qwen-obs] Response tokens:', payload.response_tokens);
+        console.log('[qwen-obs] Total tokens:', payload.total_tokens);
+        console.log('[qwen-obs] ===============================');
 
         // ========================================================
-        // SEND TO NODE.JS BACKEND
+        // SEND TO BACKEND
         // ========================================================
 
         (async () => {
 
             try {
 
-                const response =
-                    await fetch(
-                        `${API_BASE_URL}/api/usage/events`,
-                        {
-                            method: 'POST',
+                console.log(
+                    '[qwen-obs] POSTING EVENT TO:',
+                    `${API_BASE_URL}/api/usage/events`
+                );
 
-                            headers: {
-                                'Content-Type':
-                                    'application/json'
-                            },
+                const response = await fetch(
+                    `${API_BASE_URL}/api/usage/events`,
+                    {
+                        method: 'POST',
 
-                            body:
-                                JSON.stringify(
-                                    payload
-                                )
-                        }
-                    );
+                        headers: {
+                            'Content-Type':
+                                'application/json'
+                        },
+
+                        body:
+                            JSON.stringify(payload)
+                    }
+                );
 
                 console.log(
                     '[qwen-obs] BACKEND HTTP STATUS:',
                     response.status
                 );
 
-                // ------------------------------------------------
-                // Parse response
-                // ------------------------------------------------
-
-                let data = null;
+                // ====================================================
+                // READ RESPONSE
+                // ====================================================
 
                 const contentType =
                     response.headers.get(
                         'content-type'
                     ) || '';
+
+                let data = null;
 
                 if (
                     contentType.includes(
@@ -359,6 +297,7 @@ chrome.runtime.onMessage.addListener(
                             '[qwen-obs] JSON PARSE ERROR:',
                             error
                         );
+
                     }
 
                 } else {
@@ -371,6 +310,7 @@ chrome.runtime.onMessage.addListener(
                     } catch {
 
                         data = null;
+
                     }
                 }
 
@@ -379,77 +319,67 @@ chrome.runtime.onMessage.addListener(
                     data
                 );
 
-                // =================================================
-                // BACKEND REJECTED REQUEST
-                // =================================================
+                // ====================================================
+                // BACKEND ERROR
+                // ====================================================
 
                 if (!response.ok) {
 
                     console.error(
-                        '[qwen-obs] BACKEND REJECTED EVENT'
+                        '[qwen-obs] ❌ BACKEND REJECTED EVENT'
                     );
 
                     console.error(
-                        '[qwen-obs] Status:',
+                        '[qwen-obs] Event type:',
+                        eventType
+                    );
+
+                    console.error(
+                        '[qwen-obs] Interaction:',
+                        payload.interaction_id
+                    );
+
+                    console.error(
+                        '[qwen-obs] HTTP status:',
                         response.status
                     );
 
                     console.error(
-                        '[qwen-obs] Response:',
+                        '[qwen-obs] Backend response:',
                         data
                     );
 
                     sendResponse({
                         accepted: false,
                         error: 'api_error',
-                        status:
-                            response.status,
+                        status: response.status,
                         data
                     });
 
                     return;
                 }
 
-                // =================================================
+                // ====================================================
                 // SUCCESS
-                // =================================================
+                // ====================================================
 
                 console.log(
-                    '[qwen-obs] ==============================='
+                    '[qwen-obs] ✅ EVENT SUCCESSFULLY SENT'
                 );
 
                 console.log(
-                    '[qwen-obs] EVENT SUCCESSFULLY SENT'
-                );
-
-                console.log(
-                    '[qwen-obs] Employee Email:',
-                    detectedEmail
-                );
-
-                console.log(
-                    '[qwen-obs] Provider:',
-                    provider
-                );
-
-                console.log(
-                    '[qwen-obs] Product:',
-                    product
-                );
-
-                console.log(
-                    '[qwen-obs] Event:',
+                    '[qwen-obs] Event type:',
                     eventType
                 );
 
                 console.log(
-                    '[qwen-obs] Model:',
-                    event.model
+                    '[qwen-obs] Interaction:',
+                    payload.interaction_id
                 );
 
                 console.log(
-                    '[qwen-obs] Interaction:',
-                    event.interaction_id
+                    '[qwen-obs] Backend status:',
+                    response.status
                 );
 
                 console.log(
@@ -464,22 +394,23 @@ chrome.runtime.onMessage.addListener(
             } catch (error) {
 
                 console.error(
-                    '[qwen-obs] BACKEND FETCH ERROR:',
+                    '[qwen-obs] ❌ BACKEND FETCH ERROR:',
                     error
                 );
 
                 sendResponse({
                     accepted: false,
                     error: 'backend_unreachable',
-                    message:
-                        error.message
+                    message: error.message
                 });
             }
 
         })();
 
-        // Keep message channel alive
-        // while async work runs.
+        // ========================================================
+        // KEEP MESSAGE CHANNEL OPEN
+        // ========================================================
+
         return true;
     }
 );

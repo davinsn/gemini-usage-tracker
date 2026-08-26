@@ -46,16 +46,6 @@
             return null;
         }
 
-        /*
-         * Most Qwen requests use JSON:
-         *
-         * {
-         *   "model": "qwen3.7-plus",
-         *   "stream": true,
-         *   ...
-         * }
-         */
-
         if (typeof body === 'string') {
             try {
                 const data = JSON.parse(body);
@@ -67,15 +57,10 @@
                     return data.model;
                 }
             } catch {
-                // Not JSON. Ignore.
+                // Not JSON
             }
-
-            return null;
         }
 
-        /*
-         * Handle Request / other body types where possible.
-         */
         return null;
     };
 
@@ -85,34 +70,44 @@
             const init = args[1];
 
             let url = '';
+            let body = null;
+
+            // ----------------------------------------------------
+            // fetch("url", { body: "..." })
+            // ----------------------------------------------------
 
             if (typeof input === 'string') {
                 url = input;
-            } else if (
+
+                if (
+                    init &&
+                    typeof init.body === 'string'
+                ) {
+                    body = init.body;
+                }
+            }
+
+            // ----------------------------------------------------
+            // fetch(new Request(...))
+            // ----------------------------------------------------
+
+            else if (
                 input &&
                 typeof input.url === 'string'
             ) {
                 url = input.url;
+
+                if (
+                    init &&
+                    typeof init.body === 'string'
+                ) {
+                    body = init.body;
+                }
             }
 
-            /*
-             * Try to inspect the request body.
-             */
-            let body = null;
-
-            if (
-                init &&
-                typeof init.body === 'string'
-            ) {
-                body = init.body;
-            }
-
-            /*
-             * Request objects can also contain a body,
-             * but reading them can consume the stream.
-             *
-             * We intentionally do NOT read Request.body here.
-             */
+            // ----------------------------------------------------
+            // Inspect body
+            // ----------------------------------------------------
 
             const model = extractModelFromBody(body);
 
@@ -120,10 +115,10 @@
                 sendModelToExtension(model);
             }
 
-            /*
-             * Optional debugging:
-             * only log likely Qwen API requests.
-             */
+            // ----------------------------------------------------
+            // Debug Qwen requests
+            // ----------------------------------------------------
+
             if (
                 url &&
                 /qwen|chat|api/i.test(url)
@@ -132,7 +127,15 @@
                     '[qwen-obs-network] Qwen fetch:',
                     url
                 );
+
+                if (body) {
+                    console.log(
+                        '[qwen-obs-network] Request body:',
+                        body
+                    );
+                }
             }
+
         } catch (error) {
             console.warn(
                 '[qwen-obs-network] FETCH INSPECTION ERROR:',
@@ -140,12 +143,7 @@
             );
         }
 
-        /*
-         * IMPORTANT:
-         * Always call the original fetch.
-         *
-         * We do not modify the request or response.
-         */
+        // ALWAYS preserve original fetch
         return originalFetch.apply(this, args);
     };
 
