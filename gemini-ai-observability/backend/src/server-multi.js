@@ -8,18 +8,24 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import DatabaseConstructor from 'better-sqlite3';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
-const port = Number(process.env.PORT || 4000);
+const __dirname = path.dirname(
+    fileURLToPath(import.meta.url)
+);
 
-const JWT_SECRET = process.env.JWT_SECRET || 'development-only-secret-key-change-me';
-const JWT_EXPIRES_IN = '7d'; // 7 days
+const app = express();
+
+const port =
+    Number(process.env.PORT || 4000);
+
+const JWT_SECRET =
+    process.env.JWT_SECRET ||
+    'development-only-secret-key-change-me';
+
+const JWT_EXPIRES_IN = '7d';
 
 // ============================================================
 // DEFAULT PROVIDER CONFIGURATION
 // ============================================================
-// Used only when an older Gemini event does not explicitly
-// provide provider/product.
 
 const DEFAULT_PROVIDER = 'google';
 const DEFAULT_PRODUCT = 'gemini';
@@ -47,13 +53,17 @@ const initSqlPath =
         'init.sql'
     );
 
-const db = new DatabaseConstructor(dbPath);
+const db =
+    new DatabaseConstructor(dbPath);
 
 db.pragma('journal_mode = WAL');
 
 // Initialize database
 db.exec(
-    fs.readFileSync(initSqlPath, 'utf8')
+    fs.readFileSync(
+        initSqlPath,
+        'utf8'
+    )
 );
 
 // ============================================================
@@ -92,20 +102,37 @@ app.use(
 // ============================================================
 
 app.get('/', (_req, res) => {
+
     try {
-        db.prepare('SELECT 1').get();
+
+        db.prepare(
+            'SELECT 1'
+        ).get();
 
         res.json({
+
             ok: true,
-            service: 'ai-observability-api',
+
+            service:
+                'ai-observability-api',
+
             db: 'sqlite',
-            defaultProvider: DEFAULT_PROVIDER,
-            defaultProduct: DEFAULT_PRODUCT
+
+            defaultProvider:
+                DEFAULT_PROVIDER,
+
+            defaultProduct:
+                DEFAULT_PRODUCT
         });
+
     } catch (error) {
+
         res.status(503).json({
+
             ok: false,
-            error: 'database_unavailable'
+
+            error:
+                'database_unavailable'
         });
     }
 });
@@ -115,111 +142,155 @@ app.get('/', (_req, res) => {
 // ============================================================
 
 function validEmail(email) {
+
     return (
         typeof email === 'string' &&
         /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
     );
 }
+
 // ============================================================
 // AUTHENTICATION
 // ============================================================
 
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body || {};
+app.post(
+    '/api/auth/login',
+    async (req, res) => {
 
-        // ----------------------------------------------------
-        // VALIDATION
-        // ----------------------------------------------------
+        try {
 
-        if (!validEmail(email)) {
-            return res.status(400).json({
-                success: false,
-                error: 'A valid email is required'
-            });
-        }
-
-        if (
-            typeof password !== 'string' ||
-            password.length === 0
-        ) {
-            return res.status(400).json({
-                success: false,
-                error: 'Password is required'
-            });
-        }
-
-        // ----------------------------------------------------
-        // FIND EMPLOYEE
-        // ----------------------------------------------------
-
-        const employee = db.prepare(`
-            SELECT
-                id,
+            const {
                 email,
-                department,
-                role,
-                password_hash
-            FROM employees
-            WHERE LOWER(email) = LOWER(?)
-        `).get(email);
+                password
+            } = req.body || {};
 
-        if (!employee) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid email or password'
-            });
-        }
+            // ----------------------------------------------------
+            // VALIDATION
+            // ----------------------------------------------------
 
-        // ----------------------------------------------------
-        // CHECK PASSWORD
-        // ----------------------------------------------------
+            if (!validEmail(email)) {
 
-        if (!employee.password_hash) {
-            return res.status(401).json({
-                success: false,
-                error: 'This employee account has no password configured'
-            });
-        }
+                return res.status(400).json({
 
-        const passwordValid = await bcrypt.compare(
-            password,
-            employee.password_hash
-        );
+                    success: false,
 
-        if (!passwordValid) {
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid email or password'
-            });
-        }
-
-        // ----------------------------------------------------
-        // RESPONSE
-        // ----------------------------------------------------
-
-        res.json({
-            success: true,
-            employee: {
-                id: employee.id,
-                email: employee.email,
-                department: employee.department,
-                role: employee.role
+                    error:
+                        'A valid email is required'
+                });
             }
-        });
 
-    } catch (error) {
-        console.error(
-            '[ai-obs] LOGIN ERROR:',
-            error
-        );
+            if (
+                typeof password !== 'string' ||
+                password.length === 0
+            ) {
 
-        res.status(500).json({
-            success: false,
-            error: 'login_failed'
-        });
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+                        'Password is required'
+                });
+            }
+
+            // ----------------------------------------------------
+            // FIND EMPLOYEE
+            // ----------------------------------------------------
+
+            const employee =
+                db.prepare(`
+                    SELECT
+                        id,
+                        email,
+                        department,
+                        role,
+                        password_hash
+                    FROM employees
+                    WHERE LOWER(email) = LOWER(?)
+                `).get(email);
+
+            if (!employee) {
+
+                return res.status(401).json({
+
+                    success: false,
+
+                    error:
+                        'Invalid email or password'
+                });
+            }
+
+            // ----------------------------------------------------
+            // CHECK PASSWORD
+            // ----------------------------------------------------
+
+            if (!employee.password_hash) {
+
+                return res.status(401).json({
+
+                    success: false,
+
+                    error:
+                        'This employee account has no password configured'
+                });
+            }
+
+            const passwordValid =
+                await bcrypt.compare(
+                    password,
+                    employee.password_hash
+                );
+
+            if (!passwordValid) {
+
+                return res.status(401).json({
+
+                    success: false,
+
+                    error:
+                        'Invalid email or password'
+                });
+            }
+
+            // ----------------------------------------------------
+            // RESPONSE
+            // ----------------------------------------------------
+
+            res.json({
+
+                success: true,
+
+                employee: {
+
+                    id: employee.id,
+
+                    email: employee.email,
+
+                    department:
+                        employee.department,
+
+                    role:
+                        employee.role
+                }
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] LOGIN ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                error:
+                    'login_failed'
+            });
+        }
     }
-});
+);
 
 // ============================================================
 // CURRENT AUTHENTICATED EMPLOYEE
@@ -230,37 +301,51 @@ app.get(
     (req, res) => {
 
         try {
-            const employee = db.prepare(`
-                SELECT
-                    id,
-                    email,
-                    department,
-                    role
-                FROM employees
-                WHERE id = ?
-            `).get(req.employee_id);
+
+            const employee =
+                db.prepare(`
+                    SELECT
+                        id,
+                        email,
+                        department,
+                        role
+                    FROM employees
+                    WHERE id = ?
+                `).get(
+                    req.employee_id
+                );
 
             if (!employee) {
+
                 return res.status(404).json({
+
                     success: false,
-                    error: 'Employee not found'
+
+                    error:
+                        'Employee not found'
                 });
             }
 
             res.json({
+
                 success: true,
+
                 employee
             });
 
         } catch (error) {
+
             console.error(
                 '[ai-obs] AUTH ME ERROR:',
                 error
             );
 
             res.status(500).json({
+
                 success: false,
-                error: 'auth_check_failed'
+
+                error:
+                    'auth_check_failed'
             });
         }
     }
@@ -270,116 +355,47 @@ app.get(
 // EMPLOYEE UPSERT
 // ============================================================
 
-const upsertEmployee = db.prepare(`
-    INSERT INTO employees(
-        email,
-        department,
-        role
-    )
-    VALUES (
-        @email,
-        @department,
-        @role
-    )
-    ON CONFLICT(email) DO UPDATE SET
-        department = COALESCE(
-            @department,
-            department
-        ),
-        role = COALESCE(
-            @role,
+const upsertEmployee =
+    db.prepare(`
+        INSERT INTO employees(
+            email,
+            department,
             role
         )
-`);
+        VALUES (
+            @email,
+            @department,
+            @role
+        )
+        ON CONFLICT(email) DO UPDATE SET
 
-const getEmployeeId = db.prepare(
-    'SELECT id FROM employees WHERE email = ?'
-);
+            department =
+                COALESCE(
+                    @department,
+                    department
+                ),
+
+            role =
+                COALESCE(
+                    @role,
+                    role
+                )
+    `);
+
+const getEmployeeId =
+    db.prepare(
+        'SELECT id FROM employees WHERE email = ?'
+    );
 
 // ============================================================
 // INSERT EVENT
 // ============================================================
 
-const insertEvent = db.prepare(`
-    INSERT OR IGNORE INTO usage_events
-    (
-        employee_id,
-        provider,
-        product,
-        event_type,
-        session_id,
-        interaction_id,
-        model,
-        occurred_at,
-        latency_ms,
-        prompt_length,
-        response_length,
-        prompt_tokens,
-        response_tokens,
-        total_tokens,
-        metadata
-    )
-    VALUES
-    (
-        @employee_id,
-        @provider,
-        @product,
-        @event_type,
-        @session_id,
-        @interaction_id,
-        @model,
-        @occurred_at,
-        @latency_ms,
-        @prompt_length,
-        @response_length,
-        @prompt_tokens,
-        @response_tokens,
-        @total_tokens,
-        @metadata
-    )
-`);
-
-// ============================================================
-// COMPLETE EVENT
-// ============================================================
-
-const completeEvent = db.prepare(`
-    UPDATE usage_events
-    SET
-        latency_ms = @latency_ms,
-        prompt_length = @prompt_length,
-        response_length = @response_length,
-
-        prompt_tokens = @prompt_tokens,
-        response_tokens = @response_tokens,
-        total_tokens = @total_tokens,
-
-        model = @model,
-        metadata = @metadata
-    WHERE employee_id = @employee_id
-      AND interaction_id = @interaction_id
-      AND provider = @provider
-      AND product = @product
-`);
-
-// ============================================================
-// EVENT INGESTION
-// ============================================================
-
-app.post(
-    '/api/usage/events',
-    (req, res) => {
-
-        const body = req.body || {};
-
-        // ----------------------------------------------------
-        // EVENT DATA
-        // ----------------------------------------------------
-
-        const {
-            // EMAIL NOW COMES FROM THE AI WEBSITE / EXTENSION
-            email,
-
+const insertEvent =
+    db.prepare(`
+        INSERT OR IGNORE INTO usage_events
+        (
+            employee_id,
             provider,
             product,
             event_type,
@@ -394,33 +410,168 @@ app.post(
             response_tokens,
             total_tokens,
             metadata
+        )
+        VALUES
+        (
+            @employee_id,
+            @provider,
+            @product,
+            @event_type,
+            @session_id,
+            @interaction_id,
+            @model,
+            @occurred_at,
+            @latency_ms,
+            @prompt_length,
+            @response_length,
+            @prompt_tokens,
+            @response_tokens,
+            @total_tokens,
+            @metadata
+        )
+    `);
+
+// ============================================================
+// COMPLETE EVENT
+// ============================================================
+
+const completeEvent =
+    db.prepare(`
+        UPDATE usage_events
+        SET
+
+            latency_ms =
+                @latency_ms,
+
+            prompt_length =
+                @prompt_length,
+
+            response_length =
+                @response_length,
+
+            prompt_tokens =
+                @prompt_tokens,
+
+            response_tokens =
+                @response_tokens,
+
+            total_tokens =
+                @total_tokens,
+
+            model =
+                @model,
+
+            metadata =
+                @metadata
+
+        WHERE employee_id =
+                @employee_id
+
+          AND interaction_id =
+                @interaction_id
+
+          AND provider =
+                @provider
+
+          AND product =
+                @product
+    `);
+
+// ============================================================
+// EVENT INGESTION
+// ============================================================
+
+app.post(
+    '/api/usage/events',
+    (req, res) => {
+
+        const body =
+            req.body || {};
+
+        // ----------------------------------------------------
+        // EVENT DATA
+        // ----------------------------------------------------
+
+        const {
+
+            // EMAIL COMES FROM AI WEBSITE / EXTENSION
+            email,
+
+            provider,
+
+            product,
+
+            event_type,
+
+            session_id,
+
+            interaction_id,
+
+            model,
+
+            occurred_at,
+
+            latency_ms,
+
+            prompt_length,
+
+            response_length,
+
+            prompt_tokens,
+
+            response_tokens,
+
+            total_tokens,
+
+            metadata
+
         } = body;
+
+        // ----------------------------------------------------
+        // EMAIL VALIDATION
+        // ----------------------------------------------------
+
+        if (
+            !email ||
+            typeof email !== 'string'
+        ) {
+
+            return res.status(400).json({
+
+                error:
+                    'email is required'
+            });
+        }
 
         // ----------------------------------------------------
         // FIND EMPLOYEE BY EMAIL
         // ----------------------------------------------------
 
-        if (!email || typeof email !== 'string') {
-            return res.status(400).json({
-                error: 'email is required'
-            });
-        }
-
-        const employee = db.prepare(`
-            SELECT
-                id,
-                email
-            FROM employees
-            WHERE LOWER(email) = LOWER(?)
-        `).get(email);
+        const employee =
+            db.prepare(`
+                SELECT
+                    id,
+                    email
+                FROM employees
+                WHERE LOWER(email) = LOWER(?)
+            `).get(email);
 
         if (!employee) {
+
+            console.error(
+                '[ai-obs] EMPLOYEE NOT FOUND:',
+                email
+            );
+
             return res.status(404).json({
-                error: 'Employee not found'
+
+                error:
+                    'Employee not found'
             });
         }
 
-        const employeeId = employee.id;
+        const employeeId =
+            employee.id;
 
         // ----------------------------------------------------
         // PROVIDER / PRODUCT
@@ -442,7 +593,9 @@ app.post(
             typeof event_type !== 'string' ||
             !occurred_at
         ) {
+
             return res.status(400).json({
+
                 error:
                     'event_type and occurred_at are required'
             });
@@ -455,48 +608,120 @@ app.post(
         console.log(
             '[ai-obs] EVENT:',
             {
-                employee_id: employeeId,
-                email: employee.email,
-                provider: eventProvider,
-                product: eventProduct,
+                employee_id:
+                    employeeId,
+
+                email:
+                    employee.email,
+
+                provider:
+                    eventProvider,
+
+                product:
+                    eventProduct,
+
                 event_type,
+
                 session_id,
+
                 interaction_id
             }
         );
 
         try {
 
-            const insertAll = db.transaction(() => {
+            const insertAll =
+                db.transaction(() => {
 
-                // ------------------------------------------------
-                // INTERACTION ID
-                // ------------------------------------------------
+                    // --------------------------------------------
+                    // INTERACTION ID
+                    // --------------------------------------------
 
-                const interactionId =
-                    interaction_id ||
-                    crypto.randomUUID();
+                    const interactionId =
+                        interaction_id ||
+                        crypto.randomUUID();
 
-                // ------------------------------------------------
-                // METADATA
-                // ------------------------------------------------
+                    // --------------------------------------------
+                    // METADATA
+                    // --------------------------------------------
 
-                const metadataJson =
-                    JSON.stringify(
-                        metadata ?? {}
-                    );
+                    const metadataJson =
+                        JSON.stringify(
+                            metadata ?? {}
+                        );
 
-                // =================================================
-                // INTERACTION COMPLETED
-                // =================================================
+                    // ============================================
+                    // INTERACTION COMPLETED
+                    // ============================================
 
-                if (
-                    event_type ===
-                    'interaction_completed'
-                ) {
+                    if (
+                        event_type ===
+                        'interaction_completed'
+                    ) {
+
+                        const result =
+                            completeEvent.run({
+
+                                employee_id:
+                                    employeeId,
+
+                                provider:
+                                    eventProvider,
+
+                                product:
+                                    eventProduct,
+
+                                interaction_id:
+                                    interactionId,
+
+                                latency_ms:
+                                    latency_ms ??
+                                    null,
+
+                                prompt_length:
+                                    prompt_length ??
+                                    null,
+
+                                response_length:
+                                    response_length ??
+                                    null,
+
+                                prompt_tokens:
+                                    prompt_tokens ??
+                                    null,
+
+                                response_tokens:
+                                    response_tokens ??
+                                    null,
+
+                                total_tokens:
+                                    total_tokens ??
+                                    null,
+
+                                model:
+                                    model ??
+                                    null,
+
+                                metadata:
+                                    metadataJson
+                            });
+
+                        return {
+
+                            inserted:
+                                result.changes === 1,
+
+                            event_id:
+                                null
+                        };
+                    }
+
+                    // ============================================
+                    // NEW EVENT
+                    // ============================================
 
                     const result =
-                        completeEvent.run({
+                        insertEvent.run({
 
                             employee_id:
                                 employeeId,
@@ -507,103 +732,59 @@ app.post(
                             product:
                                 eventProduct,
 
+                            event_type,
+
+                            session_id:
+                                session_id ??
+                                null,
+
                             interaction_id:
                                 interactionId,
 
+                            model:
+                                model ??
+                                null,
+
+                            occurred_at,
+
                             latency_ms:
-                                latency_ms ?? null,
+                                latency_ms ??
+                                null,
 
                             prompt_length:
-                                prompt_length ?? null,
+                                prompt_length ??
+                                null,
 
                             response_length:
-                                response_length ?? null,
+                                response_length ??
+                                null,
 
+                            // TOKEN ESTIMATES
                             prompt_tokens:
-                                prompt_tokens ?? null,
+                                prompt_tokens ??
+                                null,
 
                             response_tokens:
-                                response_tokens ?? null,
+                                response_tokens ??
+                                null,
 
                             total_tokens:
-                                total_tokens ?? null,
-
-                            model:
-                                model ?? null,
+                                total_tokens ??
+                                null,
 
                             metadata:
                                 metadataJson
                         });
 
                     return {
+
                         inserted:
                             result.changes === 1,
 
                         event_id:
-                            null
+                            result.lastInsertRowid
                     };
-                }
-
-                // =================================================
-                // NEW EVENT
-                // =================================================
-
-                const result =
-                    insertEvent.run({
-
-                        employee_id:
-                            employeeId,
-
-                        provider:
-                            eventProvider,
-
-                        product:
-                            eventProduct,
-
-                        event_type,
-
-                        session_id:
-                            session_id ?? null,
-
-                        interaction_id:
-                            interactionId,
-
-                        model:
-                            model ?? null,
-
-                        occurred_at,
-
-                        latency_ms:
-                            latency_ms ?? null,
-
-                        prompt_length:
-                            prompt_length ?? null,
-
-                        response_length:
-                            response_length ?? null,
-
-                        // TOKEN ESTIMATES
-                        prompt_tokens:
-                            prompt_tokens ?? null,
-
-                        response_tokens:
-                            response_tokens ?? null,
-
-                        total_tokens:
-                            total_tokens ?? null,
-
-                        metadata:
-                            metadataJson
-                    });
-
-                return {
-                    inserted:
-                        result.changes === 1,
-
-                    event_id:
-                        result.lastInsertRowid
-                };
-            });
+                });
 
             const {
                 inserted,
@@ -646,6 +827,7 @@ app.post(
             );
 
             res.status(500).json({
+
                 error:
                     'event_ingestion_failed'
             });
@@ -660,101 +842,117 @@ app.post(
 app.get(
     '/api/usage/summary',
     (req, res) => {
+
         try {
+
             const provider =
-                req.query.provider || null;
+                req.query.provider ||
+                null;
 
             const product =
-                req.query.product || null;
+                req.query.product ||
+                null;
 
             let row;
 
-            if (provider && product) {
-                row = db.prepare(`
-                    SELECT
-                        COUNT(*) FILTER (
-                            WHERE event_type = 'interaction_started'
-                        ) AS interactions,
+            if (
+                provider &&
+                product
+            ) {
 
-                        COUNT(
-                            DISTINCT employee_id
-                        ) AS active_employees,
+                row =
+                    db.prepare(`
+                        SELECT
 
-                        COUNT(
-                            DISTINCT session_id
-                        ) AS sessions,
+                            COUNT(*) FILTER (
+                                WHERE event_type =
+                                    'interaction_started'
+                            ) AS interactions,
 
-                        ROUND(
-                            AVG(latency_ms)
-                            FILTER (
-                                WHERE latency_ms IS NOT NULL
-                            )
-                        ) AS avg_latency_ms,
+                            COUNT(
+                                DISTINCT employee_id
+                            ) AS active_employees,
 
-                        COALESCE(
-                            SUM(prompt_tokens),
-                            0
-                        ) AS prompt_tokens,
+                            COUNT(
+                                DISTINCT session_id
+                            ) AS sessions,
 
-                        COALESCE(
-                            SUM(response_tokens),
-                            0
-                        ) AS response_tokens,
+                            ROUND(
+                                AVG(latency_ms)
+                                FILTER (
+                                    WHERE latency_ms
+                                    IS NOT NULL
+                                )
+                            ) AS avg_latency_ms,
 
-                        COALESCE(
-                            SUM(total_tokens),
-                            0
-                        ) AS total_tokens
+                            COALESCE(
+                                SUM(prompt_tokens),
+                                0
+                            ) AS prompt_tokens,
 
-                    FROM usage_events
+                            COALESCE(
+                                SUM(response_tokens),
+                                0
+                            ) AS response_tokens,
 
-                    WHERE provider = ?
-                      AND product = ?
-                `).get(
-                    provider,
-                    product
-                );
+                            COALESCE(
+                                SUM(total_tokens),
+                                0
+                            ) AS total_tokens
+
+                        FROM usage_events
+
+                        WHERE provider = ?
+                          AND product = ?
+                    `).get(
+                        provider,
+                        product
+                    );
 
             } else {
 
-                row = db.prepare(`
-                    SELECT
-                        COUNT(*) FILTER (
-                            WHERE event_type = 'interaction_started'
-                        ) AS interactions,
+                row =
+                    db.prepare(`
+                        SELECT
 
-                        COUNT(
-                            DISTINCT employee_id
-                        ) AS active_employees,
+                            COUNT(*) FILTER (
+                                WHERE event_type =
+                                    'interaction_started'
+                            ) AS interactions,
 
-                        COUNT(
-                            DISTINCT session_id
-                        ) AS sessions,
+                            COUNT(
+                                DISTINCT employee_id
+                            ) AS active_employees,
 
-                        ROUND(
-                            AVG(latency_ms)
-                            FILTER (
-                                WHERE latency_ms IS NOT NULL
-                            )
-                        ) AS avg_latency_ms,
+                            COUNT(
+                                DISTINCT session_id
+                            ) AS sessions,
 
-                        COALESCE(
-                            SUM(prompt_tokens),
-                            0
-                        ) AS prompt_tokens,
+                            ROUND(
+                                AVG(latency_ms)
+                                FILTER (
+                                    WHERE latency_ms
+                                    IS NOT NULL
+                                )
+                            ) AS avg_latency_ms,
 
-                        COALESCE(
-                            SUM(response_tokens),
-                            0
-                        ) AS response_tokens,
+                            COALESCE(
+                                SUM(prompt_tokens),
+                                0
+                            ) AS prompt_tokens,
 
-                        COALESCE(
-                            SUM(total_tokens),
-                            0
-                        ) AS total_tokens
+                            COALESCE(
+                                SUM(response_tokens),
+                                0
+                            ) AS response_tokens,
 
-                    FROM usage_events
-                `).get();
+                            COALESCE(
+                                SUM(total_tokens),
+                                0
+                            ) AS total_tokens
+
+                        FROM usage_events
+                    `).get();
             }
 
             res.json(row);
@@ -767,7 +965,9 @@ app.get(
             );
 
             res.status(500).json({
-                error: 'summary_failed'
+
+                error:
+                    'summary_failed'
             });
         }
     }
@@ -784,10 +984,12 @@ app.get(
         try {
 
             const provider =
-                req.query.provider || null;
+                req.query.provider ||
+                null;
 
             const product =
-                req.query.product || null;
+                req.query.product ||
+                null;
 
             let rows;
 
@@ -795,101 +997,124 @@ app.get(
             // PROVIDER + PRODUCT FILTER
             // ====================================================
 
-            if (provider && product) {
+            if (
+                provider &&
+                product
+            ) {
 
-                rows = db.prepare(`
-                    SELECT
+                rows =
+                    db.prepare(`
+                        SELECT
 
-                        e.email,
+                            e.email,
 
-                        e.department,
+                            e.department,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                        ) AS interactions,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
+                            ) AS interactions,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'gemini'
-                        ) AS gemini,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'chatgpt'
-                        ) AS chatgpt,
+                                AND LOWER(u.product) =
+                                    'gemini'
+                            ) AS gemini,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'claude'
-                        ) AS claude,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'copilot'
-                        ) AS copilot,
+                                AND LOWER(u.product) =
+                                    'chatgpt'
+                            ) AS chatgpt,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'perplexity'
-                        ) AS perplexity,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'qwen'
-                        ) AS qwen,
+                                AND LOWER(u.product) =
+                                    'claude'
+                            ) AS claude,
 
-                        COUNT(
-                            DISTINCT u.session_id
-                        ) AS sessions,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        ROUND(
-                            AVG(u.latency_ms)
-                            FILTER (
-                                WHERE u.latency_ms IS NOT NULL
-                            )
-                        ) AS avg_latency_ms,
+                                AND LOWER(u.product) =
+                                    'copilot'
+                            ) AS copilot,
 
-                        COALESCE(
-                            SUM(u.prompt_tokens),
-                            0
-                        ) AS prompt_tokens,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COALESCE(
-                            SUM(u.response_tokens),
-                            0
-                        ) AS response_tokens,
+                                AND LOWER(u.product) =
+                                    'perplexity'
+                            ) AS perplexity,
 
-                        COALESCE(
-                            SUM(u.total_tokens),
-                            0
-                        ) AS total_tokens
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                    FROM employees e
+                                AND LOWER(u.product) =
+                                    'qwen'
+                            ) AS qwen,
 
-                    LEFT JOIN usage_events u
-                        ON u.employee_id = e.id
-                        AND u.provider = ?
-                        AND u.product = ?
+                            COUNT(
+                                DISTINCT u.session_id
+                            ) AS sessions,
 
-                    GROUP BY
-                        e.id,
-                        e.email,
-                        e.department
+                            ROUND(
+                                AVG(u.latency_ms)
+                                FILTER (
+                                    WHERE u.latency_ms
+                                    IS NOT NULL
+                                )
+                            ) AS avg_latency_ms,
 
-                    ORDER BY
-                        interactions DESC
+                            COALESCE(
+                                SUM(u.prompt_tokens),
+                                0
+                            ) AS prompt_tokens,
 
-                `).all(
-                    provider,
-                    product
-                );
+                            COALESCE(
+                                SUM(u.response_tokens),
+                                0
+                            ) AS response_tokens,
+
+                            COALESCE(
+                                SUM(u.total_tokens),
+                                0
+                            ) AS total_tokens
+
+                        FROM employees e
+
+                        LEFT JOIN usage_events u
+
+                            ON u.employee_id =
+                                e.id
+
+                           AND u.provider = ?
+
+                           AND u.product = ?
+
+                        GROUP BY
+
+                            e.id,
+
+                            e.email,
+
+                            e.department
+
+                        ORDER BY
+                            interactions DESC
+                    `).all(
+                        provider,
+                        product
+                    );
 
             }
 
@@ -899,94 +1124,112 @@ app.get(
 
             else {
 
-                rows = db.prepare(`
-                    SELECT
+                rows =
+                    db.prepare(`
+                        SELECT
 
-                        e.email,
+                            e.email,
 
-                        e.department,
+                            e.department,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                        ) AS interactions,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
+                            ) AS interactions,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'gemini'
-                        ) AS gemini,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'chatgpt'
-                        ) AS chatgpt,
+                                AND LOWER(u.product) =
+                                    'gemini'
+                            ) AS gemini,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'claude'
-                        ) AS claude,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'copilot'
-                        ) AS copilot,
+                                AND LOWER(u.product) =
+                                    'chatgpt'
+                            ) AS chatgpt,
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'perplexity'
-                        ) AS perplexity,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COUNT(u.id) FILTER (
-                            WHERE u.event_type =
-                                'interaction_started'
-                            AND LOWER(u.product) = 'qwen'
-                        ) AS qwen,
+                                AND LOWER(u.product) =
+                                    'claude'
+                            ) AS claude,
 
-                        COUNT(
-                            DISTINCT u.session_id
-                        ) AS sessions,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        ROUND(
-                            AVG(u.latency_ms)
-                            FILTER (
-                                WHERE u.latency_ms IS NOT NULL
-                            )
-                        ) AS avg_latency_ms,
+                                AND LOWER(u.product) =
+                                    'copilot'
+                            ) AS copilot,
 
-                        COALESCE(
-                            SUM(u.prompt_tokens),
-                            0
-                        ) AS prompt_tokens,
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                        COALESCE(
-                            SUM(u.response_tokens),
-                            0
-                        ) AS response_tokens,
+                                AND LOWER(u.product) =
+                                    'perplexity'
+                            ) AS perplexity,
 
-                        COALESCE(
-                            SUM(u.total_tokens),
-                            0
-                        ) AS total_tokens
+                            COUNT(u.id) FILTER (
+                                WHERE u.event_type =
+                                    'interaction_started'
 
-                    FROM employees e
+                                AND LOWER(u.product) =
+                                    'qwen'
+                            ) AS qwen,
 
-                    LEFT JOIN usage_events u
-                        ON u.employee_id = e.id
+                            COUNT(
+                                DISTINCT u.session_id
+                            ) AS sessions,
 
-                    GROUP BY
-                        e.id,
-                        e.email,
-                        e.department
+                            ROUND(
+                                AVG(u.latency_ms)
+                                FILTER (
+                                    WHERE u.latency_ms
+                                    IS NOT NULL
+                                )
+                            ) AS avg_latency_ms,
 
-                    ORDER BY
-                        interactions DESC
+                            COALESCE(
+                                SUM(u.prompt_tokens),
+                                0
+                            ) AS prompt_tokens,
 
-                `).all();
+                            COALESCE(
+                                SUM(u.response_tokens),
+                                0
+                            ) AS response_tokens,
+
+                            COALESCE(
+                                SUM(u.total_tokens),
+                                0
+                            ) AS total_tokens
+
+                        FROM employees e
+
+                        LEFT JOIN usage_events u
+
+                            ON u.employee_id =
+                                e.id
+
+                        GROUP BY
+
+                            e.id,
+
+                            e.email,
+
+                            e.department
+
+                        ORDER BY
+                            interactions DESC
+                    `).all();
             }
 
             res.json(rows);
@@ -999,6 +1242,7 @@ app.get(
             );
 
             res.status(500).json({
+
                 error:
                     'employee_summary_failed'
             });
@@ -1024,74 +1268,113 @@ app.get(
 
             if (provider) {
 
-                rows = db.prepare(`
-                    SELECT
-                        provider,
-                        product,
+                rows =
+                    db.prepare(`
+                        SELECT
 
-                        COUNT(*) FILTER (
-                            WHERE event_type =
-                                'interaction_started'
-                        ) AS interactions,
+                            provider,
 
-                        COUNT(
-                            DISTINCT session_id
-                        ) AS sessions,
+                            product,
 
-                        ROUND(
-                            AVG(latency_ms)
-                            FILTER (
-                                WHERE latency_ms IS NOT NULL
-                            )
-                        ) AS avg_latency_ms,
-                        COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
-                        COALESCE(SUM(response_tokens), 0) AS response_tokens,
-                        COALESCE(SUM(total_tokens), 0) AS total_tokens
+                            COUNT(*) FILTER (
+                                WHERE event_type =
+                                    'interaction_started'
+                            ) AS interactions,
 
-                    FROM usage_events
+                            COUNT(
+                                DISTINCT session_id
+                            ) AS sessions,
 
-                    WHERE provider = ?
+                            ROUND(
+                                AVG(latency_ms)
+                                FILTER (
+                                    WHERE latency_ms
+                                    IS NOT NULL
+                                )
+                            ) AS avg_latency_ms,
 
-                    GROUP BY
-                        provider,
-                        product
+                            COALESCE(
+                                SUM(prompt_tokens),
+                                0
+                            ) AS prompt_tokens,
 
-                    ORDER BY
-                        interactions DESC
-                `).all(provider);
+                            COALESCE(
+                                SUM(response_tokens),
+                                0
+                            ) AS response_tokens,
+
+                            COALESCE(
+                                SUM(total_tokens),
+                                0
+                            ) AS total_tokens
+
+                        FROM usage_events
+
+                        WHERE provider = ?
+
+                        GROUP BY
+
+                            provider,
+
+                            product
+
+                        ORDER BY
+                            interactions DESC
+                    `).all(provider);
 
             } else {
 
-                rows = db.prepare(`
-                    SELECT
-                        provider,
-                        product,
+                rows =
+                    db.prepare(`
+                        SELECT
 
-                        COUNT(*) FILTER (
-                            WHERE event_type =
-                                'interaction_started'
-                        ) AS interactions,
+                            provider,
 
-                        COUNT(
-                            DISTINCT session_id
-                        ) AS sessions,
+                            product,
 
-                        ROUND(
-                            AVG(latency_ms)
-                            FILTER (
-                                WHERE latency_ms IS NOT NULL
-                            )
-                        ) AS avg_latency_ms
+                            COUNT(*) FILTER (
+                                WHERE event_type =
+                                    'interaction_started'
+                            ) AS interactions,
 
-                    FROM usage_events
+                            COUNT(
+                                DISTINCT session_id
+                            ) AS sessions,
 
-                    GROUP BY
-                        provider,
-                        product
+                            ROUND(
+                                AVG(latency_ms)
+                                FILTER (
+                                    WHERE latency_ms
+                                    IS NOT NULL
+                                )
+                            ) AS avg_latency_ms,
 
-                    ORDER BY
-                        interactions DESC
-                `).all();
+                            COALESCE(
+                                SUM(prompt_tokens),
+                                0
+                            ) AS prompt_tokens,
+
+                            COALESCE(
+                                SUM(response_tokens),
+                                0
+                            ) AS response_tokens,
+
+                            COALESCE(
+                                SUM(total_tokens),
+                                0
+                            ) AS total_tokens
+
+                        FROM usage_events
+
+                        GROUP BY
+
+                            provider,
+
+                            product
+
+                        ORDER BY
+                            interactions DESC
+                    `).all();
             }
 
             res.json(rows);
@@ -1104,6 +1387,7 @@ app.get(
             );
 
             res.status(500).json({
+
                 error:
                     'product_summary_failed'
             });
@@ -1118,10 +1402,13 @@ app.get(
 app.get(
     '/api/usage/by-provider',
     (_req, res) => {
+
         try {
+
             const rows =
                 db.prepare(`
                     SELECT
+
                         provider,
 
                         COUNT(*) FILTER (
@@ -1140,7 +1427,8 @@ app.get(
                         ROUND(
                             AVG(latency_ms)
                             FILTER (
-                                WHERE latency_ms IS NOT NULL
+                                WHERE latency_ms
+                                IS NOT NULL
                             )
                         ) AS avg_latency_ms,
 
@@ -1170,18 +1458,21 @@ app.get(
 
                     GROUP BY provider
 
-                    ORDER BY interactions DESC
+                    ORDER BY
+                        interactions DESC
                 `).all();
 
             res.json(rows);
 
         } catch (error) {
+
             console.error(
                 '[ai-obs] PROVIDER SUMMARY ERROR:',
                 error
             );
 
             res.status(500).json({
+
                 error:
                     'provider_summary_failed'
             });
@@ -1202,7 +1493,9 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
+
                         provider,
+
                         product,
 
                         COUNT(*) FILTER (
@@ -1221,9 +1514,25 @@ app.get(
                         ROUND(
                             AVG(latency_ms)
                             FILTER (
-                                WHERE latency_ms IS NOT NULL
+                                WHERE latency_ms
+                                IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(prompt_tokens),
+                            0
+                        ) AS prompt_tokens,
+
+                        COALESCE(
+                            SUM(response_tokens),
+                            0
+                        ) AS response_tokens,
+
+                        COALESCE(
+                            SUM(total_tokens),
+                            0
+                        ) AS total_tokens
 
                     FROM usage_events
 
@@ -1231,7 +1540,9 @@ app.get(
                       AND product IS NOT NULL
 
                     GROUP BY
+
                         provider,
+
                         product
 
                     ORDER BY
@@ -1248,6 +1559,7 @@ app.get(
             );
 
             res.status(500).json({
+
                 error:
                     'provider_product_summary_failed'
             });
@@ -1268,9 +1580,13 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
+
                         e.email,
+
                         e.department,
+
                         u.provider,
+
                         u.product,
 
                         COUNT(u.id) FILTER (
@@ -1285,24 +1601,48 @@ app.get(
                         ROUND(
                             AVG(u.latency_ms)
                             FILTER (
-                                WHERE u.latency_ms IS NOT NULL
+                                WHERE u.latency_ms
+                                IS NOT NULL
                             )
-                        ) AS avg_latency_ms
+                        ) AS avg_latency_ms,
+
+                        COALESCE(
+                            SUM(u.prompt_tokens),
+                            0
+                        ) AS prompt_tokens,
+
+                        COALESCE(
+                            SUM(u.response_tokens),
+                            0
+                        ) AS response_tokens,
+
+                        COALESCE(
+                            SUM(u.total_tokens),
+                            0
+                        ) AS total_tokens
 
                     FROM employees e
 
                     INNER JOIN usage_events u
-                        ON u.employee_id = e.id
+
+                        ON u.employee_id =
+                            e.id
 
                     WHERE
                         u.provider IS NOT NULL
+
                         AND u.product IS NOT NULL
 
                     GROUP BY
+
                         e.id,
+
                         e.email,
+
                         e.department,
+
                         u.provider,
+
                         u.product
 
                     ORDER BY
@@ -1319,6 +1659,7 @@ app.get(
             );
 
             res.status(500).json({
+
                 error:
                     'employee_product_summary_failed'
             });
@@ -1338,31 +1679,48 @@ app.get(
 
             const limit =
                 Math.min(
-                    Number(req.query.limit) || 100,
+                    Number(
+                        req.query.limit
+                    ) || 100,
                     1000
                 );
 
             const rows =
                 db.prepare(`
                     SELECT
+
                         u.id,
+
                         e.email,
+
                         e.department,
+
                         e.role,
+
                         u.provider,
+
                         u.product,
+
                         u.event_type,
+
                         u.session_id,
+
                         u.interaction_id,
+
                         u.model,
+
                         u.occurred_at,
+
                         u.latency_ms,
 
                         u.prompt_length,
+
                         u.response_length,
 
                         u.prompt_tokens,
+
                         u.response_tokens,
+
                         u.total_tokens,
 
                         u.metadata
@@ -1370,7 +1728,9 @@ app.get(
                     FROM usage_events u
 
                     INNER JOIN employees e
-                        ON e.id = u.employee_id
+
+                        ON e.id =
+                            u.employee_id
 
                     ORDER BY
                         u.id DESC
@@ -1388,6 +1748,7 @@ app.get(
             );
 
             res.status(500).json({
+
                 error:
                     'events_query_failed'
             });
