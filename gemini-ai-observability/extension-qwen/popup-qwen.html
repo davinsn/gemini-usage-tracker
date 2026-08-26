@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Qwen Usage Collector</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            width: 260px;
+            padding: 16px;
+            margin: 0;
+            background: #ffffff;
+            color: #111827;
+        }
+
+        h1 {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        button {
+            width: 100%;
+            padding: 9px 10px;
+            border: none;
+            border-radius: 6px;
+            background: #20b8cd;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        button.secondary {
+            background: #ef4444;
+        }
+
+        #status {
+            font-size: 12px;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        #statusDot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: #9ca3af;
+        }
+
+        #statusDot.connected {
+            background: #22c55e;
+        }
+
+        #errorMessage {
+            font-size: 12px;
+            color: #ef4444;
+            margin-bottom: 10px;
+            min-height: 14px;
+        }
+
+        #loggedInView, #loginView {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Qwen Usage Collector</h1>
+
+    <div id="status">
+        <span id="statusDot"></span>
+        <span id="statusText">Checking...</span>
+    </div>
+
+    <div id="loginView">
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="username">
+
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password">
+
+        <div id="errorMessage"></div>
+
+        <button id="loginButton">Log In</button>
+    </div>
+
+    <div id="loggedInView">
+        <button id="logoutButton" class="secondary">Log Out</button>
+    </div>
+
+    <script src="popup-qwen.js"></script>
+</body>
+</html>
