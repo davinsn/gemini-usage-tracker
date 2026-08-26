@@ -286,53 +286,6 @@ function authenticateToken(req, res, next) {
     }
 }
 
-// ============================================================
-// AUTHENTICATION MIDDLEWARE
-// ============================================================
-
-function authenticateToken(req, res, next) {
-    const authHeader =
-        req.headers.authorization;
-
-    if (!authHeader) {
-        return res.status(401).json({
-            success: false,
-            error: 'Authentication required'
-        });
-    }
-
-    const [scheme, token] =
-        authHeader.split(' ');
-
-    if (
-        scheme !== 'Bearer' ||
-        !token
-    ) {
-        return res.status(401).json({
-            success: false,
-            error: 'Invalid authorization header'
-        });
-    }
-
-    try {
-        const decoded = jwt.verify(
-            token,
-            JWT_SECRET
-        );
-
-        req.employee_id =
-            decoded.employee_id;
-
-        next();
-
-    } catch (error) {
-        return res.status(401).json({
-            success: false,
-            error: 'Invalid or expired token'
-        });
-    }
-}
-
 
 // ============================================================
 // CURRENT AUTHENTICATED EMPLOYEE
