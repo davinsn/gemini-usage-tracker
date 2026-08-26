@@ -122,6 +122,265 @@ function validEmail(email) {
 }
 
 // ============================================================
+// AUTHENTICATION
+// ============================================================
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body || {};
+
+        // ----------------------------------------------------
+        // VALIDATION
+        // ----------------------------------------------------
+
+        if (!validEmail(email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'A valid email is required'
+            });
+        }
+
+        if (
+            typeof password !== 'string' ||
+            password.length === 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                error: 'Password is required'
+            });
+        }
+
+        // ----------------------------------------------------
+        // FIND EMPLOYEE
+        // ----------------------------------------------------
+
+        const employee = db.prepare(`
+            SELECT
+                id,
+                email,
+                department,
+                role,
+                password_hash
+            FROM employees
+            WHERE LOWER(email) = LOWER(?)
+        `).get(email);
+
+        if (!employee) {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid email or password'
+            });
+        }
+
+        // ----------------------------------------------------
+        // CHECK PASSWORD
+        // ----------------------------------------------------
+
+        if (!employee.password_hash) {
+            return res.status(401).json({
+                success: false,
+                error: 'This employee account has no password configured'
+            });
+        }
+
+        const passwordValid = await bcrypt.compare(
+            password,
+            employee.password_hash
+        );
+
+        if (!passwordValid) {
+            return res.status(401).json({
+                success: false,
+                error: 'Invalid email or password'
+            });
+        }
+
+        // ----------------------------------------------------
+        // CREATE TOKEN
+        // ----------------------------------------------------
+
+        const token = jwt.sign(
+            {
+                employee_id: employee.id
+            },
+            JWT_SECRET,
+            {
+                expiresIn: JWT_EXPIRES_IN
+            }
+        );
+
+        // ----------------------------------------------------
+        // RESPONSE
+        // ----------------------------------------------------
+
+        res.json({
+            success: true,
+
+            token,
+
+            employee: {
+                id: employee.id,
+                email: employee.email,
+                department: employee.department,
+                role: employee.role
+            }
+        });
+
+    } catch (error) {
+        console.error(
+            '[ai-obs] LOGIN ERROR:',
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            error: 'login_failed'
+        });
+    }
+});
+
+// ============================================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================================
+
+function authenticateToken(req, res, next) {
+    const authHeader =
+        req.headers.authorization;
+
+    if (!authHeader) {
+        return res.status(401).json({
+            success: false,
+            error: 'Authentication required'
+        });
+    }
+
+    const [scheme, token] =
+        authHeader.split(' ');
+
+    if (
+        scheme !== 'Bearer' ||
+        !token
+    ) {
+        return res.status(401).json({
+            success: false,
+            error: 'Invalid authorization header'
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(
+            token,
+            JWT_SECRET
+        );
+
+        req.employee_id =
+            decoded.employee_id;
+
+        next();
+
+    } catch (error) {
+        return res.status(401).json({
+            success: false,
+            error: 'Invalid or expired token'
+        });
+    }
+}
+
+// ============================================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================================
+
+function authenticateToken(req, res, next) {
+    const authHeader =
+        req.headers.authorization;
+
+    if (!authHeader) {
+        return res.status(401).json({
+            success: false,
+            error: 'Authentication required'
+        });
+    }
+
+    const [scheme, token] =
+        authHeader.split(' ');
+
+    if (
+        scheme !== 'Bearer' ||
+        !token
+    ) {
+        return res.status(401).json({
+            success: false,
+            error: 'Invalid authorization header'
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(
+            token,
+            JWT_SECRET
+        );
+
+        req.employee_id =
+            decoded.employee_id;
+
+        next();
+
+    } catch (error) {
+        return res.status(401).json({
+            success: false,
+            error: 'Invalid or expired token'
+        });
+    }
+}
+
+
+// ============================================================
+// CURRENT AUTHENTICATED EMPLOYEE
+// ============================================================
+
+app.get(
+    '/api/auth/me',
+    authenticateToken,
+    (req, res) => {
+
+        try {
+            const employee = db.prepare(`
+                SELECT
+                    id,
+                    email,
+                    department,
+                    role
+                FROM employees
+                WHERE id = ?
+            `).get(req.employee_id);
+
+            if (!employee) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Employee not found'
+                });
+            }
+
+            res.json({
+                success: true,
+                employee
+            });
+
+        } catch (error) {
+            console.error(
+                '[ai-obs] AUTH ME ERROR:',
+                error
+            );
+
+            res.status(500).json({
+                success: false,
+                error: 'auth_check_failed'
+            });
+        }
+    }
+);
+
+// ============================================================
 // EMPLOYEE UPSERT
 // ============================================================
 
@@ -223,6 +482,7 @@ const completeEvent = db.prepare(`
 
 app.post(
     '/api/usage/events',
+    authenticateToken,
     (req, res) => {
 
         const body = req.body || {};
@@ -232,16 +492,10 @@ app.post(
         // ----------------------------------------------------
 
         const {
-            email,
-            employeeEmail,
-            department,
-            role,
-
             // IMPORTANT:
             // These now come from the AI extension.
             provider,
             product,
-
             event_type,
             session_id,
             interaction_id,
@@ -257,12 +511,10 @@ app.post(
         } = body;
 
         // ----------------------------------------------------
-        // SUPPORT BOTH email AND employeeEmail
+        // EMPLOYEE ID FROM AUTHENTICATED USER
         // ----------------------------------------------------
 
-        const resolvedEmail =
-            email ||
-            employeeEmail;
+        const employeeId = req.employee_id;
 
         // ----------------------------------------------------
         // PROVIDER / PRODUCT
@@ -281,13 +533,13 @@ app.post(
         // ----------------------------------------------------
 
         if (
-            !validEmail(resolvedEmail) ||
+            !employeeId ||
             typeof event_type !== 'string' ||
             !occurred_at
         ) {
             return res.status(400).json({
                 error:
-                    'email, event_type and occurred_at are required'
+                    'event_type and occurred_at are required'
             });
         }
 
@@ -298,7 +550,7 @@ app.post(
         console.log(
             '[ai-obs] EVENT:',
             {
-                email: resolvedEmail,
+                employee_id: employeeId,
                 provider: eventProvider,
                 product: eventProduct,
                 event_type,
@@ -310,32 +562,6 @@ app.post(
         try {
 
             const insertAll = db.transaction(() => {
-
-                // ------------------------------------------------
-                // CREATE / UPDATE EMPLOYEE
-                // ------------------------------------------------
-
-                upsertEmployee.run({
-                    email: resolvedEmail,
-
-                    department:
-                        department ?? null,
-
-                    role:
-                        role ?? null
-                });
-
-                const employeeRow =
-                    getEmployeeId.get(resolvedEmail);
-
-                if (!employeeRow) {
-                    throw new Error(
-                        'Employee could not be created or found'
-                    );
-                }
-
-                const employeeId =
-                    employeeRow.id;
 
                 // ------------------------------------------------
                 // INTERACTION ID
