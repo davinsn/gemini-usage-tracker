@@ -1,394 +1,747 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
 
-    <title>AI Observability Dashboard</title>
+    <meta charset="UTF-8">
 
-    <link rel="stylesheet" href="style.css" />
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
+    <title>
+        AI Observability Dashboard
+    </title>
 
-  <body>
-    <div class="dashboard">
-      <!-- =====================================================
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/chart.js"
+    ></script>
+
+</head>
+
+<body>
+
+<div class="dashboard">
+
+    <!-- =====================================================
          HEADER
     ====================================================== -->
 
-      <header class="dashboard-header">
-        <div>
-          <h1>AI Observability</h1>
+    <header class="dashboard-header">
 
-          <p>Multi-AI usage monitoring and analytics</p>
+        <div>
+
+            <h1>
+                AI Observability
+            </h1>
+
+            <p>
+                Multi-AI usage monitoring and analytics
+            </p>
+
         </div>
 
         <div class="status">
-          <span class="status-dot"></span>
 
-          API Connected
+            <span
+                class="status-dot"
+            ></span>
+
+            API Connected
+
         </div>
-      </header>
 
-      <!-- =====================================================
+    </header>
+
+
+    <!-- =====================================================
          KPI OVERVIEW
     ====================================================== -->
 
-      <section class="overview-section">
-        <div class="section-title">
-          <div>
-            <h2>Overview</h2>
+    <section class="overview-section">
 
-            <p>Overall AI activity across your organization</p>
-          </div>
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    Overview
+                </h2>
+
+                <p>
+                    Overall AI activity across your organization
+                </p>
+
+            </div>
+
         </div>
+
 
         <div class="metrics">
-          <!-- TOTAL INTERACTIONS -->
 
-          <div class="metric-card">
-            <span class="metric-label"> AI Interactions </span>
+            <!-- TOTAL INTERACTIONS -->
 
-            <strong id="interactions"> - </strong>
+            <div class="metric-card">
 
-            <span class="metric-description">
-              Total AI interactions recorded
-            </span>
-          </div>
+                <span class="metric-label">
+                    AI Interactions
+                </span>
 
-          <!-- TOTAL SESSIONS -->
+                <strong id="interactions">
+                    -
+                </strong>
 
-          <div class="metric-card">
-            <span class="metric-label"> AI Sessions </span>
+                <span class="metric-description">
+                    Total AI interactions recorded
+                </span>
 
-            <strong id="sessions"> - </strong>
+            </div>
 
-            <span class="metric-description"> Total AI sessions </span>
-          </div>
 
-          <!-- ACTIVE EMPLOYEES -->
+            <!-- TOTAL SESSIONS -->
 
-          <div class="metric-card">
-            <span class="metric-label"> Active Users </span>
+            <div class="metric-card">
 
-            <strong id="employees"> - </strong>
+                <span class="metric-label">
+                    AI Sessions
+                </span>
 
-            <span class="metric-description"> Employees using AI </span>
-          </div>
+                <strong id="sessions">
+                    -
+                </strong>
 
-          <!-- LATENCY -->
+                <span class="metric-description">
+                    Total AI sessions
+                </span>
 
-          <div class="metric-card">
-            <span class="metric-label"> Average Latency </span>
+            </div>
 
-            <strong id="latency"> - </strong>
 
-            <span class="metric-description"> Average AI response time </span>
-          </div>
+            <!-- ACTIVE EMPLOYEES -->
 
-          <!-- ESTIMATED TOKENS -->
+            <div class="metric-card">
 
-          <div class="metric-card">
-            <span class="metric-label"> Estimated Tokens </span>
+                <span class="metric-label">
+                    Active Users
+                </span>
 
-            <strong id="tokens"> - </strong>
+                <strong id="employees">
+                    -
+                </strong>
 
-            <span class="metric-description"> Estimated tokens processed </span>
-          </div>
+                <span class="metric-description">
+                    Employees using AI
+                </span>
 
-          <!-- ESTIMATED COST -->
+            </div>
 
-          <div class="metric-card">
-            <span class="metric-label"> Estimated AI Cost </span>
 
-            <strong id="estimatedCostMyr"> RM0.00 </strong>
+            <!-- LATENCY -->
 
-            <span class="metric-description">
-              Estimated total cost in MYR
-            </span>
-          </div>
+            <div class="metric-card">
+
+                <span class="metric-label">
+                    Average Latency
+                </span>
+
+                <strong id="latency">
+                    -
+                </strong>
+
+                <span class="metric-description">
+                    Average AI response time
+                </span>
+
+            </div>
+
+
+            <!-- ESTIMATED TOKENS -->
+
+            <div class="metric-card">
+
+                <span class="metric-label">
+                    Estimated Tokens
+                </span>
+
+                <strong id="tokens">
+                    -
+                </strong>
+
+                <span class="metric-description">
+                    Estimated tokens processed
+                </span>
+
+            </div>
+
+
+            <!-- ESTIMATED COST -->
+
+            <div class="metric-card">
+
+                <span class="metric-label">
+                    Estimated AI Cost
+                </span>
+
+                <strong id="estimatedCostMyr">
+                    RM0.00
+                </strong>
+
+                <span class="metric-description">
+                    Estimated total cost in MYR
+                </span>
+
+            </div>
+
         </div>
+
 
         <!-- =================================================
              COST INFORMATION
         ================================================== -->
 
         <div
-          class="cost-information"
-          style="margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap"
+            class="cost-information"
+            style="
+                margin-top: 20px;
+                display: flex;
+                gap: 20px;
+                flex-wrap: wrap;
+            "
         >
-          <div class="metric-card">
-            <span class="metric-label"> Estimated Cost (USD) </span>
 
-            <strong id="estimatedCostUsd"> $0.00 </strong>
+            <div
+                class="metric-card"
+            >
 
-            <span class="metric-description">
-              Calculated using AI token pricing
-            </span>
-          </div>
+                <span class="metric-label">
+                    Estimated Cost (USD)
+                </span>
 
-          <div class="metric-card">
-            <span class="metric-label"> BNM USD/MYR Rate </span>
+                <strong id="estimatedCostUsd">
+                    $0.00
+                </strong>
 
-            <strong id="exchangeRate"> Loading... </strong>
+                <span class="metric-description">
+                    Calculated using AI token pricing
+                </span>
 
-            <span class="metric-description">
-              Bank Negara Malaysia exchange rate
-            </span>
-          </div>
+            </div>
+
+
+            <div
+                class="metric-card"
+            >
+
+                <span class="metric-label">
+                    BNM USD/MYR Rate
+                </span>
+
+                <strong id="exchangeRate">
+                    Loading...
+                </strong>
+
+                <span class="metric-description">
+                    Bank Negara Malaysia exchange rate
+                </span>
+
+            </div>
+
         </div>
-      </section>
 
-      <!-- =====================================================
+    </section>
+
+
+    <!-- =====================================================
          AI PLATFORMS
     ====================================================== -->
 
-      <section class="platform-section">
+    <section class="platform-section">
+
         <div class="section-title">
-          <div>
-            <h2>AI Platforms</h2>
 
-            <p>See which AI platforms your employees are using</p>
-          </div>
+            <div>
+
+                <h2>
+                    AI Platforms
+                </h2>
+
+                <p>
+                    See which AI platforms your employees are using
+                </p>
+
+            </div>
+
         </div>
 
-        <div id="providerCards" class="metrics provider-metrics">
-          <!-- Provider cards can be generated here -->
-        </div>
-      </section>
 
-      <!-- =====================================================
+        <div
+            id="providerCards"
+            class="metrics provider-metrics"
+        >
+
+            <!-- Provider cards can be generated here -->
+
+        </div>
+
+    </section>
+
+
+    <!-- =====================================================
          USAGE OVERVIEW
     ====================================================== -->
 
-      <section class="dashboard-section">
-        <div class="section-title">
-          <div>
-            <h2>Usage Overview</h2>
+    <section class="dashboard-section">
 
-            <p>Compare activity across AI platforms</p>
-          </div>
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    Usage Overview
+                </h2>
+
+                <p>
+                    Compare activity across AI platforms
+                </p>
+
+            </div>
+
         </div>
+
 
         <div class="charts">
-          <!-- INTERACTIONS BY AI -->
 
-          <div class="chart-card">
-            <div class="chart-header">
-              <div>
-                <h2>Interactions by AI</h2>
 
-                <p>Number of interactions recorded for each AI platform</p>
-              </div>
+            <!-- INTERACTIONS BY AI -->
+
+            <div class="chart-card">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Interactions by AI
+                        </h2>
+
+                        <p>
+                            Number of interactions recorded for
+                            each AI platform
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="providerInteractionChart"
+                    ></canvas>
+
+                </div>
+
             </div>
 
-            <div class="chart-container">
-              <canvas id="providerInteractionChart"></canvas>
+
+            <!-- SESSIONS BY AI -->
+
+            <div class="chart-card">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Sessions by AI
+                        </h2>
+
+                        <p>
+                            Number of sessions started on each
+                            AI platform
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="providerSessionChart"
+                    ></canvas>
+
+                </div>
+
             </div>
-          </div>
 
-          <!-- SESSIONS BY AI -->
-
-          <div class="chart-card">
-            <div class="chart-header">
-              <div>
-                <h2>Sessions by AI</h2>
-
-                <p>Number of sessions started on each AI platform</p>
-              </div>
-            </div>
-
-            <div class="chart-container">
-              <canvas id="providerSessionChart"></canvas>
-            </div>
-          </div>
         </div>
-      </section>
 
-      <!-- =====================================================
+    </section>
+
+
+    <!-- =====================================================
          TOKEN USAGE
     ====================================================== -->
 
-      <section class="dashboard-section">
-        <div class="section-title">
-          <div>
-            <h2>Token Usage</h2>
+    <section class="dashboard-section">
 
-            <p>Estimated token consumption across AI platforms</p>
-          </div>
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    Token Usage
+                </h2>
+
+                <p>
+                    Estimated token consumption across AI platforms
+                </p>
+
+            </div>
+
         </div>
+
 
         <div class="charts">
-          <!-- TOKENS BY AI -->
 
-          <div class="chart-card wide">
-            <div class="chart-header">
-              <div>
-                <h2>Estimated Tokens by AI</h2>
 
-                <p>Estimated total tokens processed by each AI platform</p>
-              </div>
+            <!-- TOKENS BY AI -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Estimated Tokens by AI
+                        </h2>
+
+                        <p>
+                            Estimated total tokens processed by
+                            each AI platform
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="providerTokenChart"
+                    ></canvas>
+
+                </div>
+
             </div>
 
-            <div class="chart-container">
-              <canvas id="providerTokenChart"></canvas>
-            </div>
-          </div>
         </div>
-      </section>
 
-      <!-- =====================================================
+    </section>
+
+
+    <!-- =====================================================
          EMPLOYEE USAGE
     ====================================================== -->
 
-      <section class="dashboard-section">
-        <div class="section-title">
-          <div>
-            <h2>Employee Usage</h2>
+    <section class="dashboard-section">
 
-            <p>Understand how employees are using AI</p>
-          </div>
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    Employee Usage
+                </h2>
+
+                <p>
+                    Understand how employees are using AI
+                </p>
+
+            </div>
+
         </div>
+
 
         <div class="charts">
-          <!-- INTERACTIONS BY EMPLOYEE -->
 
-          <div class="chart-card wide">
-            <div class="chart-header">
-              <div>
-                <h2>Interactions by Employee</h2>
 
-                <p>Total AI interactions for each employee</p>
-              </div>
+            <!-- INTERACTIONS BY EMPLOYEE -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Interactions by Employee
+                        </h2>
+
+                        <p>
+                            Total AI interactions for each employee
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="employeeInteractionChart"
+                    ></canvas>
+
+                </div>
+
             </div>
 
-            <div class="chart-container">
-              <canvas id="employeeInteractionChart"></canvas>
+
+            <!-- AI USAGE BY EMPLOYEE -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            AI Usage by Employee
+                        </h2>
+
+                        <p>
+                            Compare AI platform usage across employees
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container large">
+
+                    <canvas
+                        id="employeeAiChart"
+                    ></canvas>
+
+                </div>
+
             </div>
-          </div>
 
-          <!-- AI USAGE BY EMPLOYEE -->
-
-          <div class="chart-card wide">
-            <div class="chart-header">
-              <div>
-                <h2>AI Usage by Employee</h2>
-
-                <p>Compare AI platform usage across employees</p>
-              </div>
-            </div>
-
-            <div class="chart-container large">
-              <canvas id="employeeAiChart"></canvas>
-            </div>
-          </div>
         </div>
-      </section>
 
-      <!-- =====================================================
+    </section>
+
+
+    <!-- =====================================================
          PLATFORM PERFORMANCE
     ====================================================== -->
 
-      <section class="dashboard-section">
-        <div class="section-title">
-          <div>
-            <h2>Platform Performance</h2>
+    <section class="dashboard-section">
 
-            <p>Compare response performance across AI platforms</p>
-          </div>
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    Platform Performance
+                </h2>
+
+                <p>
+                    Compare response performance across AI platforms
+                </p>
+
+            </div>
+
         </div>
+
 
         <div class="charts">
-          <!-- LATENCY -->
 
-          <div class="chart-card wide">
-            <div class="chart-header">
-              <div>
-                <h2>Average Response Latency</h2>
 
-                <p>Average time taken for each AI platform to respond</p>
-              </div>
+            <!-- LATENCY -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Average Response Latency
+                        </h2>
+
+                        <p>
+                            Average time taken for each AI platform
+                            to respond
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="latencyChart"
+                    ></canvas>
+
+                </div>
+
             </div>
 
-            <div class="chart-container">
-              <canvas id="latencyChart"></canvas>
-            </div>
-          </div>
         </div>
-      </section>
 
-      <!-- =====================================================
+    </section>
+
+
+    <!-- =====================================================
          EMPLOYEE DETAIL TABLE
     ====================================================== -->
 
-      <section class="table-section">
-        <div class="section-title">
-          <div>
-            <h2>Employee AI Usage</h2>
+    <section class="table-section">
 
-            <p>
-              Detailed breakdown of AI activity and estimated token usage by
-              employee
-            </p>
-          </div>
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    Employee AI Usage
+                </h2>
+
+                <p>
+                    Detailed breakdown of AI activity and estimated
+                    token usage by employee
+                </p>
+
+            </div>
+
         </div>
+
 
         <div class="table-card">
-          <div class="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Employee</th>
 
-                  <th>Department</th>
+            <div class="table-wrapper">
 
-                  <th>Gemini</th>
+                <table>
 
-                  <th>ChatGPT</th>
+                    <thead>
 
-                  <th>Claude</th>
+                        <tr>
 
-                  <th>Copilot</th>
+                            <th>
+                                Employee
+                            </th>
 
-                  <th>Perplexity</th>
+                            <th>
+                                Department
+                            </th>
 
-                  <th>Qwen</th>
+                            <th>
+                                Gemini
+                            </th>
 
-                  <th>Total</th>
+                            <th>
+                                ChatGPT
+                            </th>
 
-                  <th>Sessions</th>
+                            <th>
+                                Claude
+                            </th>
 
-                  <th>Avg Latency</th>
+                            <th>
+                                Copilot
+                            </th>
 
-                  <th>Est. Total Tokens</th>
-                </tr>
-              </thead>
+                            <th>
+                                Perplexity
+                            </th>
 
-              <tbody id="employeeTable">
-                <!-- Rows generated by dashboard.js -->
-              </tbody>
-            </table>
-          </div>
+                            <th>
+                                Qwen
+                            </th>
+
+                            <th>
+                                Total
+                            </th>
+
+                            <th>
+                                Sessions
+                            </th>
+
+                            <th>
+                                Avg Latency
+                            </th>
+
+                            <th>
+                                Est. Total Tokens
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody
+                        id="employeeTable"
+                    >
+
+                        <!-- Rows generated by dashboard.js -->
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
         </div>
-      </section>
 
-      <!-- =====================================================
+    </section>
+
+
+    <!-- =====================================================
          FOOTER
     ====================================================== -->
 
-      <footer>
-        <span> Last updated: </span>
+    <footer>
 
-        <strong id="lastUpdated"> - </strong>
-      </footer>
-    </div>
+        <span>
+            Last updated:
+        </span>
 
-    <!-- =====================================================
+        <strong
+            id="lastUpdated"
+        >
+            -
+        </strong>
+
+    </footer>
+
+</div>
+
+
+<!-- =====================================================
      DASHBOARD JAVASCRIPT
 ====================================================== -->
 
-    <script src="dashboard.js"></script>
-  </body>
+<script
+    src="dashboard.js"
+></script>
+
+
+</body>
+
 </html>

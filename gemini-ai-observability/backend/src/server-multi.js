@@ -1,90 +1,134 @@
-import express from "express";
-import cors from "cors";
-import crypto from "crypto";
-import bcrypt from "bcrypt";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
-import DatabaseConstructor from "better-sqlite3";
+import express from 'express';
+import cors from 'cors';
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import DatabaseConstructor from 'better-sqlite3';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.dirname(
+    fileURLToPath(import.meta.url)
+);
 
 const app = express();
 
-const port = Number(process.env.PORT || 4000);
+const port =
+    Number(process.env.PORT || 4000);
+
 
 // ============================================================
 // DEFAULT PROVIDER CONFIGURATION
 // ============================================================
 
-const DEFAULT_PROVIDER = "google";
-const DEFAULT_PRODUCT = "gemini";
+const DEFAULT_PROVIDER = 'google';
+const DEFAULT_PRODUCT = 'gemini';
 
 // ============================================================
 // DATABASE
 // ============================================================
 
 const dbPath =
-  process.env.DATABASE_PATH ||
-  path.join(__dirname, "..", "..", "db", "gemini_observability.sqlite3");
+    process.env.DATABASE_PATH ||
+    path.join(
+        __dirname,
+        '..',
+        '..',
+        'db',
+        'gemini_observability.sqlite3'
+    );
 
-const initSqlPath = path.join(__dirname, "..", "..", "db", "init.sql");
+const initSqlPath =
+    path.join(
+        __dirname,
+        '..',
+        '..',
+        'db',
+        'init.sql'
+    );
 
-const db = new DatabaseConstructor(dbPath);
+const db =
+    new DatabaseConstructor(dbPath);
 
-db.pragma("journal_mode = WAL");
+db.pragma('journal_mode = WAL');
 
 // Initialize database
-db.exec(fs.readFileSync(initSqlPath, "utf8"));
+db.exec(
+    fs.readFileSync(
+        initSqlPath,
+        'utf8'
+    )
+);
 
 // ============================================================
 // MIDDLEWARE
 // ============================================================
 
 app.use(
-  cors({
-    origin: true,
-  }),
+    cors({
+        origin: true
+    })
 );
 
 app.use(
-  express.json({
-    limit: "256kb",
-  }),
+    express.json({
+        limit: '256kb'
+    })
 );
 
 // ============================================================
 // DASHBOARD
 // ============================================================
 
-app.use(express.static(path.join(__dirname, "..", "..", "dashboard")));
+app.use(
+    express.static(
+        path.join(
+            __dirname,
+            '..',
+            '..',
+            'dashboard'
+        )
+    )
+);
 
 // ============================================================
 // HEALTH CHECK
 // ============================================================
 
-app.get("/", (_req, res) => {
-  try {
-    db.prepare("SELECT 1").get();
+app.get('/', (_req, res) => {
 
-    res.json({
-      ok: true,
+    try {
 
-      service: "ai-observability-api",
+        db.prepare(
+            'SELECT 1'
+        ).get();
 
-      db: "sqlite",
+        res.json({
 
-      defaultProvider: DEFAULT_PROVIDER,
+            ok: true,
 
-      defaultProduct: DEFAULT_PRODUCT,
-    });
-  } catch (error) {
-    res.status(503).json({
-      ok: false,
+            service:
+                'ai-observability-api',
 
-      error: "database_unavailable",
-    });
-  }
+            db: 'sqlite',
+
+            defaultProvider:
+                DEFAULT_PROVIDER,
+
+            defaultProduct:
+                DEFAULT_PRODUCT
+        });
+
+    } catch (error) {
+
+        res.status(503).json({
+
+            ok: false,
+
+            error:
+                'database_unavailable'
+        });
+    }
 });
 
 // ============================================================
@@ -92,44 +136,63 @@ app.get("/", (_req, res) => {
 // ============================================================
 
 function validEmail(email) {
-  return typeof email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+
+    return (
+        typeof email === 'string' &&
+        /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
+    );
 }
 
 // ============================================================
 // AUTHENTICATION
 // ============================================================
 
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
+app.post(
+    '/api/auth/login',
+    async (req, res) => {
 
-    // ----------------------------------------------------
-    // VALIDATION
-    // ----------------------------------------------------
+        try {
 
-    if (!validEmail(email)) {
-      return res.status(400).json({
-        success: false,
+            const {
+                email,
+                password
+            } = req.body || {};
 
-        error: "A valid email is required",
-      });
-    }
+            // ----------------------------------------------------
+            // VALIDATION
+            // ----------------------------------------------------
 
-    if (typeof password !== "string" || password.length === 0) {
-      return res.status(400).json({
-        success: false,
+            if (!validEmail(email)) {
 
-        error: "Password is required",
-      });
-    }
+                return res.status(400).json({
 
-    // ----------------------------------------------------
-    // FIND EMPLOYEE
-    // ----------------------------------------------------
+                    success: false,
 
-    const employee = db
-      .prepare(
-        `
+                    error:
+                        'A valid email is required'
+                });
+            }
+
+            if (
+                typeof password !== 'string' ||
+                password.length === 0
+            ) {
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+                        'Password is required'
+                });
+            }
+
+            // ----------------------------------------------------
+            // FIND EMPLOYEE
+            // ----------------------------------------------------
+
+            const employee =
+                db.prepare(`
                     SELECT
                         id,
                         email,
@@ -138,80 +201,103 @@ app.post("/api/auth/login", async (req, res) => {
                         password_hash
                     FROM employees
                     WHERE LOWER(email) = LOWER(?)
-                `,
-      )
-      .get(email);
+                `).get(email);
 
-    if (!employee) {
-      return res.status(401).json({
-        success: false,
+            if (!employee) {
 
-        error: "Invalid email or password",
-      });
+                return res.status(401).json({
+
+                    success: false,
+
+                    error:
+                        'Invalid email or password'
+                });
+            }
+
+            // ----------------------------------------------------
+            // CHECK PASSWORD
+            // ----------------------------------------------------
+
+            if (!employee.password_hash) {
+
+                return res.status(401).json({
+
+                    success: false,
+
+                    error:
+                        'This employee account has no password configured'
+                });
+            }
+
+            const passwordValid =
+                await bcrypt.compare(
+                    password,
+                    employee.password_hash
+                );
+
+            if (!passwordValid) {
+
+                return res.status(401).json({
+
+                    success: false,
+
+                    error:
+                        'Invalid email or password'
+                });
+            }
+
+            // ----------------------------------------------------
+            // RESPONSE
+            // ----------------------------------------------------
+
+            res.json({
+
+                success: true,
+
+                employee: {
+
+                    id: employee.id,
+
+                    email: employee.email,
+
+                    department:
+                        employee.department,
+
+                    role:
+                        employee.role
+                }
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] LOGIN ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                error:
+                    'login_failed'
+            });
+        }
     }
-
-    // ----------------------------------------------------
-    // CHECK PASSWORD
-    // ----------------------------------------------------
-
-    if (!employee.password_hash) {
-      return res.status(401).json({
-        success: false,
-
-        error: "This employee account has no password configured",
-      });
-    }
-
-    const passwordValid = await bcrypt.compare(
-      password,
-      employee.password_hash,
-    );
-
-    if (!passwordValid) {
-      return res.status(401).json({
-        success: false,
-
-        error: "Invalid email or password",
-      });
-    }
-
-    // ----------------------------------------------------
-    // RESPONSE
-    // ----------------------------------------------------
-
-    res.json({
-      success: true,
-
-      employee: {
-        id: employee.id,
-
-        email: employee.email,
-
-        department: employee.department,
-
-        role: employee.role,
-      },
-    });
-  } catch (error) {
-    console.error("[ai-obs] LOGIN ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-
-      error: "login_failed",
-    });
-  }
-});
+);
 
 // ============================================================
 // CURRENT AUTHENTICATED EMPLOYEE
 // ============================================================
 
-app.get("/api/auth/me", (req, res) => {
-  try {
-    const employee = db
-      .prepare(
-        `
+app.get(
+    '/api/auth/me',
+    (req, res) => {
+
+        try {
+
+            const employee =
+                db.prepare(`
                     SELECT
                         id,
                         email,
@@ -219,39 +305,52 @@ app.get("/api/auth/me", (req, res) => {
                         role
                     FROM employees
                     WHERE id = ?
-                `,
-      )
-      .get(req.employee_id);
+                `).get(
+                    req.employee_id
+                );
 
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
+            if (!employee) {
 
-        error: "Employee not found",
-      });
+                return res.status(404).json({
+
+                    success: false,
+
+                    error:
+                        'Employee not found'
+                });
+            }
+
+            res.json({
+
+                success: true,
+
+                employee
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] AUTH ME ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                error:
+                    'auth_check_failed'
+            });
+        }
     }
-
-    res.json({
-      success: true,
-
-      employee,
-    });
-  } catch (error) {
-    console.error("[ai-obs] AUTH ME ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-
-      error: "auth_check_failed",
-    });
-  }
-});
+);
 
 // ============================================================
 // EMPLOYEE UPSERT
 // ============================================================
 
-const upsertEmployee = db.prepare(`
+const upsertEmployee =
+    db.prepare(`
         INSERT INTO employees(
             email,
             department,
@@ -277,13 +376,17 @@ const upsertEmployee = db.prepare(`
                 )
     `);
 
-const getEmployeeId = db.prepare("SELECT id FROM employees WHERE email = ?");
+const getEmployeeId =
+    db.prepare(
+        'SELECT id FROM employees WHERE email = ?'
+    );
 
 // ============================================================
 // INSERT EVENT
 // ============================================================
 
-const insertEvent = db.prepare(`
+const insertEvent =
+    db.prepare(`
         INSERT OR IGNORE INTO usage_events
         (
             employee_id,
@@ -326,7 +429,8 @@ const insertEvent = db.prepare(`
 // COMPLETE EVENT
 // ============================================================
 
-const completeEvent = db.prepare(`
+const completeEvent =
+    db.prepare(`
         UPDATE usage_events
         SET
 
@@ -371,262 +475,387 @@ const completeEvent = db.prepare(`
 // EVENT INGESTION
 // ============================================================
 
-app.post("/api/usage/events", (req, res) => {
-  const body = req.body || {};
+app.post(
+    '/api/usage/events',
+    (req, res) => {
 
-  // ----------------------------------------------------
-  // EVENT DATA
-  // ----------------------------------------------------
+        const body =
+            req.body || {};
 
-  const {
-    // EMAIL COMES FROM AI WEBSITE / EXTENSION
-    email,
+        // ----------------------------------------------------
+        // EVENT DATA
+        // ----------------------------------------------------
 
-    provider,
+        const {
 
-    product,
+            // EMAIL COMES FROM AI WEBSITE / EXTENSION
+            email,
 
-    event_type,
+            provider,
 
-    session_id,
+            product,
 
-    interaction_id,
+            event_type,
 
-    model,
+            session_id,
 
-    occurred_at,
+            interaction_id,
 
-    latency_ms,
+            model,
 
-    prompt_length,
+            occurred_at,
 
-    response_length,
+            latency_ms,
 
-    prompt_tokens,
+            prompt_length,
 
-    response_tokens,
+            response_length,
 
-    total_tokens,
+            prompt_tokens,
 
-    metadata,
-  } = body;
+            response_tokens,
 
-  // ----------------------------------------------------
-  // EMAIL VALIDATION
-  // ----------------------------------------------------
+            total_tokens,
 
-  if (!email || typeof email !== "string") {
-    return res.status(400).json({
-      error: "email is required",
-    });
-  }
+            metadata
 
-  // ----------------------------------------------------
-  // FIND EMPLOYEE BY EMAIL
-  // ----------------------------------------------------
+        } = body;
 
-  const employee = db
-    .prepare(
-      `
+        // ----------------------------------------------------
+        // EMAIL VALIDATION
+        // ----------------------------------------------------
+
+        if (
+            !email ||
+            typeof email !== 'string'
+        ) {
+
+            return res.status(400).json({
+
+                error:
+                    'email is required'
+            });
+        }
+
+        // ----------------------------------------------------
+        // FIND EMPLOYEE BY EMAIL
+        // ----------------------------------------------------
+
+        const employee =
+            db.prepare(`
                 SELECT
                     id,
                     email
                 FROM employees
                 WHERE LOWER(email) = LOWER(?)
-            `,
-    )
-    .get(email);
+            `).get(email);
 
-  if (!employee) {
-    console.error("[ai-obs] EMPLOYEE NOT FOUND:", email);
+        if (!employee) {
 
-    return res.status(404).json({
-      error: "Employee not found",
-    });
-  }
+            console.error(
+                '[ai-obs] EMPLOYEE NOT FOUND:',
+                email
+            );
 
-  const employeeId = employee.id;
+            return res.status(404).json({
 
-  // ----------------------------------------------------
-  // PROVIDER / PRODUCT
-  // ----------------------------------------------------
+                error:
+                    'Employee not found'
+            });
+        }
 
-  const eventProvider = provider || DEFAULT_PROVIDER;
+        const employeeId =
+            employee.id;
 
-  const eventProduct = product || DEFAULT_PRODUCT;
+        // ----------------------------------------------------
+        // PROVIDER / PRODUCT
+        // ----------------------------------------------------
 
-  // ----------------------------------------------------
-  // VALIDATION
-  // ----------------------------------------------------
+        const eventProvider =
+            provider ||
+            DEFAULT_PROVIDER;
 
-  if (typeof event_type !== "string" || !occurred_at) {
-    return res.status(400).json({
-      error: "event_type and occurred_at are required",
-    });
-  }
+        const eventProduct =
+            product ||
+            DEFAULT_PRODUCT;
 
-  // ----------------------------------------------------
-  // LOG EVENT
-  // ----------------------------------------------------
+        // ----------------------------------------------------
+        // VALIDATION
+        // ----------------------------------------------------
 
-  console.log("[ai-obs] EVENT:", {
-    employee_id: employeeId,
+        if (
+            typeof event_type !== 'string' ||
+            !occurred_at
+        ) {
 
-    email: employee.email,
+            return res.status(400).json({
 
-    provider: eventProvider,
+                error:
+                    'event_type and occurred_at are required'
+            });
+        }
 
-    product: eventProduct,
+        // ----------------------------------------------------
+        // LOG EVENT
+        // ----------------------------------------------------
 
-    event_type,
+        console.log(
+            '[ai-obs] EVENT:',
+            {
+                employee_id:
+                    employeeId,
 
-    session_id,
+                email:
+                    employee.email,
 
-    interaction_id,
-  });
+                provider:
+                    eventProvider,
 
-  try {
-    const insertAll = db.transaction(() => {
-      // --------------------------------------------
-      // INTERACTION ID
-      // --------------------------------------------
+                product:
+                    eventProduct,
 
-      const interactionId = interaction_id || crypto.randomUUID();
+                event_type,
 
-      // --------------------------------------------
-      // METADATA
-      // --------------------------------------------
+                session_id,
 
-      const metadataJson = JSON.stringify(metadata ?? {});
+                interaction_id
+            }
+        );
 
-      // ============================================
-      // INTERACTION COMPLETED
-      // ============================================
+        try {
 
-      if (event_type === "interaction_completed") {
-        const result = completeEvent.run({
-          employee_id: employeeId,
+            const insertAll =
+                db.transaction(() => {
 
-          provider: eventProvider,
+                    // --------------------------------------------
+                    // INTERACTION ID
+                    // --------------------------------------------
 
-          product: eventProduct,
+                    const interactionId =
+                        interaction_id ||
+                        crypto.randomUUID();
 
-          interaction_id: interactionId,
+                    // --------------------------------------------
+                    // METADATA
+                    // --------------------------------------------
 
-          latency_ms: latency_ms ?? null,
+                    const metadataJson =
+                        JSON.stringify(
+                            metadata ?? {}
+                        );
 
-          prompt_length: prompt_length ?? null,
+                    // ============================================
+                    // INTERACTION COMPLETED
+                    // ============================================
 
-          response_length: response_length ?? null,
+                    if (
+                        event_type ===
+                        'interaction_completed'
+                    ) {
 
-          prompt_tokens: prompt_tokens ?? null,
+                        const result =
+                            completeEvent.run({
 
-          response_tokens: response_tokens ?? null,
+                                employee_id:
+                                    employeeId,
 
-          total_tokens: total_tokens ?? null,
+                                provider:
+                                    eventProvider,
 
-          model: model ?? null,
+                                product:
+                                    eventProduct,
 
-          metadata: metadataJson,
-        });
+                                interaction_id:
+                                    interactionId,
 
-        return {
-          inserted: result.changes === 1,
+                                latency_ms:
+                                    latency_ms ??
+                                    null,
 
-          event_id: null,
-        };
-      }
+                                prompt_length:
+                                    prompt_length ??
+                                    null,
 
-      // ============================================
-      // NEW EVENT
-      // ============================================
+                                response_length:
+                                    response_length ??
+                                    null,
 
-      const result = insertEvent.run({
-        employee_id: employeeId,
+                                prompt_tokens:
+                                    prompt_tokens ??
+                                    null,
 
-        provider: eventProvider,
+                                response_tokens:
+                                    response_tokens ??
+                                    null,
 
-        product: eventProduct,
+                                total_tokens:
+                                    total_tokens ??
+                                    null,
 
-        event_type,
+                                model:
+                                    model ??
+                                    null,
 
-        session_id: session_id ?? null,
+                                metadata:
+                                    metadataJson
+                            });
 
-        interaction_id: interactionId,
+                        return {
 
-        model: model ?? null,
+                            inserted:
+                                result.changes === 1,
 
-        occurred_at,
+                            event_id:
+                                null
+                        };
+                    }
 
-        latency_ms: latency_ms ?? null,
+                    // ============================================
+                    // NEW EVENT
+                    // ============================================
 
-        prompt_length: prompt_length ?? null,
+                    const result =
+                        insertEvent.run({
 
-        response_length: response_length ?? null,
+                            employee_id:
+                                employeeId,
 
-        // TOKEN ESTIMATES
-        prompt_tokens: prompt_tokens ?? null,
+                            provider:
+                                eventProvider,
 
-        response_tokens: response_tokens ?? null,
+                            product:
+                                eventProduct,
 
-        total_tokens: total_tokens ?? null,
+                            event_type,
 
-        metadata: metadataJson,
-      });
+                            session_id:
+                                session_id ??
+                                null,
 
-      return {
-        inserted: result.changes === 1,
+                            interaction_id:
+                                interactionId,
 
-        event_id: result.lastInsertRowid,
-      };
-    });
+                            model:
+                                model ??
+                                null,
 
-    const { inserted, event_id } = insertAll();
+                            occurred_at,
 
-    // ----------------------------------------------------
-    // RESPONSE
-    // ----------------------------------------------------
+                            latency_ms:
+                                latency_ms ??
+                                null,
 
-    res.status(201).json({
-      accepted: true,
+                            prompt_length:
+                                prompt_length ??
+                                null,
 
-      inserted,
+                            response_length:
+                                response_length ??
+                                null,
 
-      event_id: inserted ? event_id : null,
+                            // TOKEN ESTIMATES
+                            prompt_tokens:
+                                prompt_tokens ??
+                                null,
 
-      employee_id: employeeId,
+                            response_tokens:
+                                response_tokens ??
+                                null,
 
-      email: employee.email,
+                            total_tokens:
+                                total_tokens ??
+                                null,
 
-      provider: eventProvider,
+                            metadata:
+                                metadataJson
+                        });
 
-      product: eventProduct,
-    });
-  } catch (error) {
-    console.error("[ai-obs] EVENT INGESTION ERROR:", error);
+                    return {
 
-    res.status(500).json({
-      error: "event_ingestion_failed",
-    });
-  }
-});
+                        inserted:
+                            result.changes === 1,
+
+                        event_id:
+                            result.lastInsertRowid
+                    };
+                });
+
+            const {
+                inserted,
+                event_id
+            } = insertAll();
+
+            // ----------------------------------------------------
+            // RESPONSE
+            // ----------------------------------------------------
+
+            res.status(201).json({
+
+                accepted: true,
+
+                inserted,
+
+                event_id:
+                    inserted
+                        ? event_id
+                        : null,
+
+                employee_id:
+                    employeeId,
+
+                email:
+                    employee.email,
+
+                provider:
+                    eventProvider,
+
+                product:
+                    eventProduct
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EVENT INGESTION ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'event_ingestion_failed'
+            });
+        }
+    }
+);
 
 // ============================================================
 // OVERALL USAGE SUMMARY
 // ============================================================
 
-app.get("/api/usage/summary", (req, res) => {
-  try {
-    const provider = req.query.provider || null;
+app.get(
+    '/api/usage/summary',
+    (req, res) => {
 
-    const product = req.query.product || null;
+        try {
 
-    let row;
+            const provider =
+                req.query.provider ||
+                null;
 
-    if (provider && product) {
-      row = db
-        .prepare(
-          `
+            const product =
+                req.query.product ||
+                null;
+
+            let row;
+
+            if (
+                provider &&
+                product
+            ) {
+
+                row =
+                    db.prepare(`
                         SELECT
 
                             COUNT(*) FILTER (
@@ -669,13 +898,15 @@ app.get("/api/usage/summary", (req, res) => {
 
                         WHERE provider = ?
                           AND product = ?
-                    `,
-        )
-        .get(provider, product);
-    } else {
-      row = db
-        .prepare(
-          `
+                    `).get(
+                        provider,
+                        product
+                    );
+
+            } else {
+
+                row =
+                    db.prepare(`
                         SELECT
 
                             COUNT(*) FILTER (
@@ -715,41 +946,58 @@ app.get("/api/usage/summary", (req, res) => {
                             ) AS total_tokens
 
                         FROM usage_events
-                    `,
-        )
-        .get();
+                    `).get();
+            }
+
+            res.json(row);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] SUMMARY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'summary_failed'
+            });
+        }
     }
-
-    res.json(row);
-  } catch (error) {
-    console.error("[ai-obs] SUMMARY ERROR:", error);
-
-    res.status(500).json({
-      error: "summary_failed",
-    });
-  }
-});
+);
 
 // ============================================================
 // USAGE BY EMPLOYEE
 // ============================================================
 
-app.get("/api/usage/by-employee", (req, res) => {
-  try {
-    const provider = req.query.provider || null;
+app.get(
+    '/api/usage/by-employee',
+    (req, res) => {
 
-    const product = req.query.product || null;
+        try {
 
-    let rows;
+            const provider =
+                req.query.provider ||
+                null;
 
-    // ====================================================
-    // PROVIDER + PRODUCT FILTER
-    // ====================================================
+            const product =
+                req.query.product ||
+                null;
 
-    if (provider && product) {
-      rows = db
-        .prepare(
-          `
+            let rows;
+
+            // ====================================================
+            // PROVIDER + PRODUCT FILTER
+            // ====================================================
+
+            if (
+                provider &&
+                product
+            ) {
+
+                rows =
+                    db.prepare(`
                         SELECT
 
                             e.email,
@@ -857,18 +1105,21 @@ app.get("/api/usage/by-employee", (req, res) => {
 
                         ORDER BY
                             interactions DESC
-                    `,
-        )
-        .all(provider, product);
-    }
+                    `).all(
+                        provider,
+                        product
+                    );
 
-    // ====================================================
-    // NO FILTER
-    // ====================================================
-    else {
-      rows = db
-        .prepare(
-          `
+            }
+
+            // ====================================================
+            // NO FILTER
+            // ====================================================
+
+            else {
+
+                rows =
+                    db.prepare(`
                         SELECT
 
                             e.email,
@@ -972,35 +1223,47 @@ app.get("/api/usage/by-employee", (req, res) => {
 
                         ORDER BY
                             interactions DESC
-                    `,
-        )
-        .all();
+                    `).all();
+            }
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EMPLOYEE SUMMARY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'employee_summary_failed'
+            });
+        }
     }
-
-    res.json(rows);
-  } catch (error) {
-    console.error("[ai-obs] EMPLOYEE SUMMARY ERROR:", error);
-
-    res.status(500).json({
-      error: "employee_summary_failed",
-    });
-  }
-});
+);
 
 // ============================================================
 // USAGE BY PRODUCT
 // ============================================================
 
-app.get("/api/usage/by-product", (req, res) => {
-  try {
-    const provider = req.query.provider || null;
+app.get(
+    '/api/usage/by-product',
+    (req, res) => {
 
-    let rows;
+        try {
 
-    if (provider) {
-      rows = db
-        .prepare(
-          `
+            const provider =
+                req.query.provider ||
+                null;
+
+            let rows;
+
+            if (provider) {
+
+                rows =
+                    db.prepare(`
                         SELECT
 
                             provider,
@@ -1051,13 +1314,12 @@ app.get("/api/usage/by-product", (req, res) => {
 
                         ORDER BY
                             interactions DESC
-                    `,
-        )
-        .all(provider);
-    } else {
-      rows = db
-        .prepare(
-          `
+                    `).all(provider);
+
+            } else {
+
+                rows =
+                    db.prepare(`
                         SELECT
 
                             provider,
@@ -1106,30 +1368,39 @@ app.get("/api/usage/by-product", (req, res) => {
 
                         ORDER BY
                             interactions DESC
-                    `,
-        )
-        .all();
+                    `).all();
+            }
+
+            res.json(rows);
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] PRODUCT SUMMARY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'product_summary_failed'
+            });
+        }
     }
-
-    res.json(rows);
-  } catch (error) {
-    console.error("[ai-obs] PRODUCT SUMMARY ERROR:", error);
-
-    res.status(500).json({
-      error: "product_summary_failed",
-    });
-  }
-});
+);
 
 // ============================================================
 // USAGE BY PROVIDER
 // ============================================================
 
-app.get("/api/usage/by-provider", (_req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        `
+app.get(
+    '/api/usage/by-provider',
+    (_req, res) => {
+
+        try {
+
+            const rows =
+                db.prepare(`
                     SELECT
 
                         provider,
@@ -1183,29 +1454,38 @@ app.get("/api/usage/by-provider", (_req, res) => {
 
                     ORDER BY
                         interactions DESC
-                `,
-      )
-      .all();
+                `).all();
 
-    res.json(rows);
-  } catch (error) {
-    console.error("[ai-obs] PROVIDER SUMMARY ERROR:", error);
+            res.json(rows);
 
-    res.status(500).json({
-      error: "provider_summary_failed",
-    });
-  }
-});
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] PROVIDER SUMMARY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'provider_summary_failed'
+            });
+        }
+    }
+);
 
 // ============================================================
 // USAGE BY PROVIDER + PRODUCT
 // ============================================================
 
-app.get("/api/usage/by-provider-product", (_req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        `
+app.get(
+    '/api/usage/by-provider-product',
+    (_req, res) => {
+
+        try {
+
+            const rows =
+                db.prepare(`
                     SELECT
 
                         provider,
@@ -1261,29 +1541,38 @@ app.get("/api/usage/by-provider-product", (_req, res) => {
 
                     ORDER BY
                         interactions DESC
-                `,
-      )
-      .all();
+                `).all();
 
-    res.json(rows);
-  } catch (error) {
-    console.error("[ai-obs] PROVIDER PRODUCT ERROR:", error);
+            res.json(rows);
 
-    res.status(500).json({
-      error: "provider_product_summary_failed",
-    });
-  }
-});
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] PROVIDER PRODUCT ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'provider_product_summary_failed'
+            });
+        }
+    }
+);
 
 // ============================================================
 // EMPLOYEE × AI PRODUCT
 // ============================================================
 
-app.get("/api/usage/by-employee-product", (_req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        `
+app.get(
+    '/api/usage/by-employee-product',
+    (_req, res) => {
+
+        try {
+
+            const rows =
+                db.prepare(`
                     SELECT
 
                         e.email,
@@ -1352,31 +1641,46 @@ app.get("/api/usage/by-employee-product", (_req, res) => {
 
                     ORDER BY
                         interactions DESC
-                `,
-      )
-      .all();
+                `).all();
 
-    res.json(rows);
-  } catch (error) {
-    console.error("[ai-obs] EMPLOYEE PRODUCT ERROR:", error);
+            res.json(rows);
 
-    res.status(500).json({
-      error: "employee_product_summary_failed",
-    });
-  }
-});
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EMPLOYEE PRODUCT ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'employee_product_summary_failed'
+            });
+        }
+    }
+);
 
 // ============================================================
 // RAW USAGE EVENTS
 // ============================================================
 
-app.get("/api/usage/events", (req, res) => {
-  try {
-    const limit = Math.min(Number(req.query.limit) || 100, 1000);
+app.get(
+    '/api/usage/events',
+    (req, res) => {
 
-    const rows = db
-      .prepare(
-        `
+        try {
+
+            const limit =
+                Math.min(
+                    Number(
+                        req.query.limit
+                    ) || 100,
+                    1000
+                );
+
+            const rows =
+                db.prepare(`
                     SELECT
 
                         u.id,
@@ -1426,103 +1730,151 @@ app.get("/api/usage/events", (req, res) => {
                         u.id DESC
 
                     LIMIT ?
-                `,
-      )
-      .all(limit);
+                `).all(limit);
 
-    res.json(rows);
-  } catch (error) {
-    console.error("[ai-obs] EVENTS QUERY ERROR:", error);
+            res.json(rows);
 
-    res.status(500).json({
-      error: "events_query_failed",
-    });
-  }
-});
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] EVENTS QUERY ERROR:',
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    'events_query_failed'
+            });
+        }
+    }
+);
+
 
 // ============================================================
 // BNM USD -> MYR EXCHANGE RATE
 // ============================================================
 
-app.get("/api/exchange-rate/usd-myr", async (_req, res) => {
-  try {
-    const response = await fetch(
-      "https://api.bnm.gov.my/public/exchange-rate/USD",
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/vnd.BNM.API.v1+json",
-          "User-Agent": "AI-Observability-API",
-        },
-      },
-    );
+app.get(
+    '/api/exchange-rate/usd-myr',
+    async (_req, res) => {
+        try {
+            const response = await fetch(
+                'https://api.bnm.gov.my/public/exchange-rate/USD',
+                {
+                    method: 'GET',
+                    headers: {
+                        'Accept':
+                            'application/vnd.BNM.API.v1+json',
+                        'User-Agent':
+                            'AI-Observability-API'
+                    }
+                }
+            );
 
-    if (!response.ok) {
-      throw new Error(`BNM API returned HTTP ${response.status}`);
+            if (!response.ok) {
+                throw new Error(
+                    `BNM API returned HTTP ${response.status}`
+                );
+            }
+
+            const data = await response.json();
+
+            console.log(
+                '[ai-obs] BNM response:',
+                JSON.stringify(data, null, 2)
+            );
+
+            // USD endpoint already returns USD data
+            const usd = data.data;
+
+            if (!usd || !usd.rate) {
+                return res.status(502).json({
+                    success: false,
+                    error:
+                        'USD exchange rate unavailable'
+                });
+            }
+
+            res.json({
+                success: true,
+                currency: 'USD',
+                target_currency: 'MYR',
+                unit: usd.unit,
+
+                buying_rate:
+                    usd.rate.buying_rate,
+
+                selling_rate:
+                    usd.rate.selling_rate,
+
+                middle_rate:
+                    usd.rate.middle_rate ??
+                    (
+                        (
+                            Number(usd.rate.buying_rate) +
+                            Number(usd.rate.selling_rate)
+                        ) / 2
+                    ),
+
+                date:
+                    usd.rate.date,
+
+                session:
+                    data.meta?.session ?? null,
+
+                last_updated:
+                    data.meta?.last_updated ?? null,
+
+                source:
+                    'Bank Negara Malaysia'
+            });
+
+        } catch (error) {
+            console.error(
+                '[ai-obs] BNM USD/MYR ERROR:',
+                error
+            );
+
+            res.status(502).json({
+                success: false,
+                error:
+                    'bnm_exchange_rate_unavailable'
+            });
+        }
     }
-
-    const data = await response.json();
-
-    console.log("[ai-obs] BNM response:", JSON.stringify(data, null, 2));
-
-    // USD endpoint already returns USD data
-    const usd = data.data;
-
-    if (!usd || !usd.rate) {
-      return res.status(502).json({
-        success: false,
-        error: "USD exchange rate unavailable",
-      });
-    }
-
-    res.json({
-      success: true,
-      currency: "USD",
-      target_currency: "MYR",
-      unit: usd.unit,
-
-      buying_rate: usd.rate.buying_rate,
-
-      selling_rate: usd.rate.selling_rate,
-
-      middle_rate:
-        usd.rate.middle_rate ??
-        (Number(usd.rate.buying_rate) + Number(usd.rate.selling_rate)) / 2,
-
-      date: usd.rate.date,
-
-      session: data.meta?.session ?? null,
-
-      last_updated: data.meta?.last_updated ?? null,
-
-      source: "Bank Negara Malaysia",
-    });
-  } catch (error) {
-    console.error("[ai-obs] BNM USD/MYR ERROR:", error);
-
-    res.status(502).json({
-      success: false,
-      error: "bnm_exchange_rate_unavailable",
-    });
-  }
-});
+);
 
 // ============================================================
 // START SERVER
 // ============================================================
 
-app.listen(port, () => {
-  console.log("=================================");
+app.listen(
+    port,
+    () => {
 
-  console.log(
-    `[ai-obs] AI observability API listening on http://localhost:${port}`,
-  );
+        console.log(
+            '================================='
+        );
 
-  console.log(`[ai-obs] Default provider: ${DEFAULT_PROVIDER}`);
+        console.log(
+            `[ai-obs] AI observability API listening on http://localhost:${port}`
+        );
 
-  console.log(`[ai-obs] Default product: ${DEFAULT_PRODUCT}`);
+        console.log(
+            `[ai-obs] Default provider: ${DEFAULT_PROVIDER}`
+        );
 
-  console.log(`[ai-obs] SQLite: ${dbPath}`);
+        console.log(
+            `[ai-obs] Default product: ${DEFAULT_PRODUCT}`
+        );
 
-  console.log("=================================");
-});
+        console.log(
+            `[ai-obs] SQLite: ${dbPath}`
+        );
+
+        console.log(
+            '================================='
+        );
+    }
+);
