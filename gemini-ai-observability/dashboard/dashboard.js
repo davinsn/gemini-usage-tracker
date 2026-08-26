@@ -100,8 +100,8 @@ const AI_PRICING = {
     },
 
     qwen: {
-        input: 0.000000276,
-        output: 0.000001101
+    input: 0.000000375,
+    output: 0.00000225
     }
 };
 
