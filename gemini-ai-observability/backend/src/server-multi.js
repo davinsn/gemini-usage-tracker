@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -9,6 +11,9 @@ import DatabaseConstructor from 'better-sqlite3';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.PORT || 4000);
+
+const JWT_SECRET = process.env.JWT_SECRET || 'development-only-secret-key-change-me';
+const JWT_EXPIRES_IN = '7d'; // 7 days
 
 // ============================================================
 // DEFAULT PROVIDER CONFIGURATION
