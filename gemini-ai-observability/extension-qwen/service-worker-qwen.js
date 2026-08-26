@@ -3,156 +3,13 @@ console.log('[qwen-obs] SERVICE WORKER LOADED');
 const API_BASE_URL = 'http://localhost:4000';
 
 // ============================================================
-// AUTH STORAGE
-// ============================================================
-// The backend now requires a JWT bearer token on every
-// /api/usage/events request. The token is obtained by logging
-// in via /api/auth/login (email + password) from the extension
-// popup, then cached here in chrome.storage.local so the
-// service worker can attach it to every outgoing event.
-// ============================================================
-
-const AUTH_STORAGE_KEY = 'qwen_obs_auth';
-
-async function getStoredAuth() {
-
-    try {
-
-        const result =
-            await chrome.storage.local.get(
-                [AUTH_STORAGE_KEY]
-            );
-
-        return result?.[AUTH_STORAGE_KEY] || null;
-
-    } catch (error) {
-
-        console.error(
-            '[qwen-obs] Failed to read stored auth:',
-            error
-        );
-
-        return null;
-    }
-}
-
-async function setStoredAuth(auth) {
-
-    try {
-
-        await chrome.storage.local.set({
-            [AUTH_STORAGE_KEY]: auth
-        });
-
-    } catch (error) {
-
-        console.error(
-            '[qwen-obs] Failed to persist auth:',
-            error
-        );
-    }
-}
-
-async function clearStoredAuth() {
-
-    try {
-
-        await chrome.storage.local.remove(
-            [AUTH_STORAGE_KEY]
-        );
-
-    } catch (error) {
-
-        console.error(
-            '[qwen-obs] Failed to clear stored auth:',
-            error
-        );
-    }
-}
-
-// ============================================================
-// LOGIN / LOGOUT (called from the extension popup)
-// ============================================================
-
-async function performLogin(email, password) {
-
-    try {
-
-        const response = await fetch(
-            `${API_BASE_URL}/api/auth/login`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    email,
-                    password
-                })
-            }
-        );
-
-        const data = await response.json().catch(
-            () => null
-        );
-
-        if (!response.ok || !data?.success) {
-
-            console.warn(
-                '[qwen-obs] Login failed:',
-                data?.error || response.status
-            );
-
-            return {
-                success: false,
-                error:
-                    data?.error ||
-                    'login_failed'
-            };
-        }
-
-        await setStoredAuth({
-            token: data.token,
-            employee: data.employee
-        });
-
-        console.log(
-            '[qwen-obs] Login succeeded for:',
-            data.employee?.email
-        );
-
-        return {
-            success: true,
-            employee: data.employee
-        };
-
-    } catch (error) {
-
-        console.error(
-            '[qwen-obs] Login request failed:',
-            error
-        );
-
-        return {
-            success: false,
-            error: 'network_error'
-        };
-    }
-}
-
-async function performLogout() {
-
-    await clearStoredAuth();
-
-    return { success: true };
-}
-
-// ============================================================
 // INSTALL / UPDATE
 // ============================================================
 
 chrome.runtime.onInstalled.addListener(() => {
-    console.log('[qwen-obs] Extension installed/updated');
+    console.log(
+        '[qwen-obs] Extension installed/updated'
+    );
 });
 
 // ============================================================
@@ -168,11 +25,6 @@ chrome.runtime.onMessage.addListener(
 
         console.log(
             '[qwen-obs] MESSAGE RECEIVED'
-        );
-
-        console.log(
-            '[qwen-obs] Raw message:',
-            message
         );
 
         console.log(
@@ -206,45 +58,15 @@ chrome.runtime.onMessage.addListener(
             return false;
         }
 
-        // ==========================================================
-        // AUTH MESSAGES (from popup)
-        // ==========================================================
+        // ========================================================
+        // ONLY ACCEPT QWEN USAGE EVENTS
+        // ========================================================
 
-        if (message.type === 'QWEN_OBS_LOGIN') {
+        if (
+            message.type !==
+            'QWEN_USAGE_EVENT'
+        ) {
 
-            performLogin(
-                message.email,
-                message.password
-            ).then(sendResponse);
-
-            return true;
-        }
-
-        if (message.type === 'QWEN_OBS_LOGOUT') {
-
-            performLogout().then(sendResponse);
-
-            return true;
-        }
-
-        if (message.type === 'QWEN_OBS_GET_AUTH_STATUS') {
-
-            getStoredAuth().then(auth => {
-
-                sendResponse({
-                    authenticated: Boolean(auth?.token),
-                    employee: auth?.employee || null
-                });
-            });
-
-            return true;
-        }
-
-        // ==========================================================
-        // USAGE EVENTS
-        // ==========================================================
-
-        if (message.type !== 'QWEN_USAGE_EVENT') {
             console.warn(
                 '[qwen-obs] Ignoring unrelated message:',
                 message.type
@@ -258,16 +80,11 @@ chrome.runtime.onMessage.addListener(
             return false;
         }
 
-        // --------------------------------------------------------
-        // Get event
-        // --------------------------------------------------------
+        // ========================================================
+        // GET EVENT
+        // ========================================================
 
         const event = message.event;
-
-        console.log(
-            '[qwen-obs] EVENT OBJECT:',
-            event
-        );
 
         if (!event) {
             console.error(
@@ -282,15 +99,9 @@ chrome.runtime.onMessage.addListener(
             return false;
         }
 
-        // --------------------------------------------------------
-        // Detected browser email (informational only now)
-        // --------------------------------------------------------
-        // Identity for the backend now comes from the JWT bearer
-        // token, not from this value. We still surface it in
-        // metadata for auditing (e.g. flagging mismatches between
-        // the Qwen account in the browser and the logged-in
-        // extension user), but it is no longer required.
-        // --------------------------------------------------------
+        // ========================================================
+        // GET QWEN ACCOUNT EMAIL
+        // ========================================================
 
         const detectedEmail =
             event.email ||
@@ -299,55 +110,43 @@ chrome.runtime.onMessage.addListener(
             null;
 
         console.log(
-            '[qwen-obs] DETECTED BROWSER EMAIL (informational):',
+            '[qwen-obs] DETECTED QWEN EMAIL:',
             detectedEmail
         );
 
-        // --------------------------------------------------------
+        if (
+            !detectedEmail ||
+            typeof detectedEmail !== 'string'
+        ) {
+
+            console.error(
+                '[qwen-obs] REJECTED: no employee email'
+            );
+
+            sendResponse({
+                accepted: false,
+                error: 'employee_email_missing'
+            });
+
+            return false;
+        }
+
+        // ========================================================
         // HARD-CODE QWEN PROVIDER
-        // --------------------------------------------------------
-        // This extension is ONLY for Qwen.
-        //
-        // Do NOT inherit provider/product from:
-        // - OpenAI / ChatGPT
-        // - Gemini
-        // - Google
-        // - Perplexity
-        // - another extension
-        // - window config
-        // - backend defaults
-        //
-        // Always identify this extension as:
-        //
-        // provider = alibaba
-        // product  = qwen
-        // --------------------------------------------------------
+        // ========================================================
 
         const provider = 'alibaba';
         const product = 'qwen';
 
-        console.log(
-            '[qwen-obs] PROVIDER:',
-            provider
-        );
+        // ========================================================
+        // EVENT TYPE
+        // ========================================================
 
-        console.log(
-            '[qwen-obs] PRODUCT:',
-            product
-        );
-
-        // --------------------------------------------------------
-        // Event type
-        // --------------------------------------------------------
-
-        const eventType = event.event_type;
-
-        console.log(
-            '[qwen-obs] EVENT TYPE:',
-            eventType
-        );
+        const eventType =
+            event.event_type;
 
         if (!eventType) {
+
             console.error(
                 '[qwen-obs] REJECTED: event_type is missing'
             );
@@ -360,27 +159,26 @@ chrome.runtime.onMessage.addListener(
             return false;
         }
 
-        // --------------------------------------------------------
-        // Timestamp
-        // --------------------------------------------------------
+        // ========================================================
+        // TIMESTAMP
+        // ========================================================
 
         const occurredAt =
             event.occurred_at ||
             new Date().toISOString();
 
-        // --------------------------------------------------------
-        // Build backend payload
-        // --------------------------------------------------------
-        // NOTE: The backend no longer accepts or needs email /
-        // department / role in the event payload — the employee
-        // is resolved server-side from the bearer token. We keep
-        // detectedEmail only inside metadata, purely for auditing.
-        // --------------------------------------------------------
+        // ========================================================
+        // BUILD BACKEND PAYLOAD
+        // ========================================================
 
         const payload = {
 
-            provider: provider,
-            product: product,
+            // IMPORTANT:
+            // Backend now identifies the employee by email.
+            email: detectedEmail,
+
+            provider,
+            product,
 
             event_type:
                 eventType,
@@ -424,6 +222,7 @@ chrome.runtime.onMessage.addListener(
             // ====================================================
 
             metadata: {
+
                 ...(event.metadata || {}),
 
                 extension:
@@ -435,11 +234,9 @@ chrome.runtime.onMessage.addListener(
                 source:
                     'chrome-extension',
 
-                provider:
-                    provider,
+                provider,
 
-                product:
-                    product,
+                product,
 
                 detected_browser_email:
                     detectedEmail,
@@ -452,9 +249,9 @@ chrome.runtime.onMessage.addListener(
             }
         };
 
-        // --------------------------------------------------------
-        // Log final payload
-        // --------------------------------------------------------
+        // ========================================================
+        // LOG FINAL PAYLOAD
+        // ========================================================
 
         console.log(
             '[qwen-obs] ==============================='
@@ -462,6 +259,11 @@ chrome.runtime.onMessage.addListener(
 
         console.log(
             '[qwen-obs] FINAL BACKEND PAYLOAD'
+        );
+
+        console.log(
+            '[qwen-obs] Employee Email:',
+            payload.email
         );
 
         console.log(
@@ -490,61 +292,48 @@ chrome.runtime.onMessage.addListener(
         );
 
         console.log(
-            '[qwen-obs] Payload:',
-            payload
+            '[qwen-obs] Model:',
+            payload.model
         );
 
         console.log(
             '[qwen-obs] ==============================='
         );
 
-        // --------------------------------------------------------
-        // Send to Node.js backend (requires Bearer auth)
-        // --------------------------------------------------------
+        // ========================================================
+        // SEND TO NODE.JS BACKEND
+        // ========================================================
 
         (async () => {
 
-            const auth = await getStoredAuth();
-
-            if (!auth?.token) {
-
-                console.error(
-                    '[qwen-obs] REJECTED: not authenticated. ' +
-                    'Log in via the extension popup first.'
-                );
-
-                sendResponse({
-                    accepted: false,
-                    error: 'not_authenticated'
-                });
-
-                return;
-            }
-
             try {
 
-                const response = await fetch(
-                    `${API_BASE_URL}/api/usage/events`,
-                    {
-                        method: 'POST',
+                const response =
+                    await fetch(
+                        `${API_BASE_URL}/api/usage/events`,
+                        {
+                            method: 'POST',
 
-                        headers: {
-                            'Content-Type':
-                                'application/json',
+                            headers: {
+                                'Content-Type':
+                                    'application/json'
+                            },
 
-                            'Authorization':
-                                `Bearer ${auth.token}`
-                        },
-
-                        body:
-                            JSON.stringify(payload)
-                    }
-                );
+                            body:
+                                JSON.stringify(
+                                    payload
+                                )
+                        }
+                    );
 
                 console.log(
                     '[qwen-obs] BACKEND HTTP STATUS:',
                     response.status
                 );
+
+                // ------------------------------------------------
+                // Parse response
+                // ------------------------------------------------
 
                 let data = null;
 
@@ -590,33 +379,9 @@ chrome.runtime.onMessage.addListener(
                     data
                 );
 
-                // ------------------------------------------------
-                // Expired / invalid token
-                // ------------------------------------------------
-
-                if (response.status === 401) {
-
-                    console.error(
-                        '[qwen-obs] TOKEN REJECTED (401). ' +
-                        'Clearing stored auth — user must log ' +
-                        'in again via the extension popup.'
-                    );
-
-                    await clearStoredAuth();
-
-                    sendResponse({
-                        accepted: false,
-                        error: 'reauthentication_required',
-                        status: response.status,
-                        data: data
-                    });
-
-                    return;
-                }
-
-                // ------------------------------------------------
-                // Backend rejected request
-                // ------------------------------------------------
+                // =================================================
+                // BACKEND REJECTED REQUEST
+                // =================================================
 
                 if (!response.ok) {
 
@@ -637,16 +402,17 @@ chrome.runtime.onMessage.addListener(
                     sendResponse({
                         accepted: false,
                         error: 'api_error',
-                        status: response.status,
-                        data: data
+                        status:
+                            response.status,
+                        data
                     });
 
                     return;
                 }
 
-                // ------------------------------------------------
-                // Success
-                // ------------------------------------------------
+                // =================================================
+                // SUCCESS
+                // =================================================
 
                 console.log(
                     '[qwen-obs] ==============================='
@@ -657,8 +423,8 @@ chrome.runtime.onMessage.addListener(
                 );
 
                 console.log(
-                    '[qwen-obs] Employee (token-authenticated):',
-                    auth.employee?.email
+                    '[qwen-obs] Employee Email:',
+                    detectedEmail
                 );
 
                 console.log(
@@ -674,6 +440,11 @@ chrome.runtime.onMessage.addListener(
                 console.log(
                     '[qwen-obs] Event:',
                     eventType
+                );
+
+                console.log(
+                    '[qwen-obs] Model:',
+                    event.model
                 );
 
                 console.log(
@@ -700,12 +471,15 @@ chrome.runtime.onMessage.addListener(
                 sendResponse({
                     accepted: false,
                     error: 'backend_unreachable',
-                    message: error.message
+                    message:
+                        error.message
                 });
             }
+
         })();
 
-        // Keep message channel alive while the async work runs.
+        // Keep message channel alive
+        // while async work runs.
         return true;
     }
 );

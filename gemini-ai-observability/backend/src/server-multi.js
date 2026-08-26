@@ -120,7 +120,6 @@ function validEmail(email) {
         /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
     );
 }
-
 // ============================================================
 // AUTHENTICATION
 // ============================================================
@@ -196,28 +195,11 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         // ----------------------------------------------------
-        // CREATE TOKEN
-        // ----------------------------------------------------
-
-        const token = jwt.sign(
-            {
-                employee_id: employee.id
-            },
-            JWT_SECRET,
-            {
-                expiresIn: JWT_EXPIRES_IN
-            }
-        );
-
-        // ----------------------------------------------------
         // RESPONSE
         // ----------------------------------------------------
 
         res.json({
             success: true,
-
-            token,
-
             employee: {
                 id: employee.id,
                 email: employee.email,
@@ -240,60 +222,11 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ============================================================
-// AUTHENTICATION MIDDLEWARE
-// ============================================================
-
-function authenticateToken(req, res, next) {
-    const authHeader =
-        req.headers.authorization;
-
-    if (!authHeader) {
-        return res.status(401).json({
-            success: false,
-            error: 'Authentication required'
-        });
-    }
-
-    const [scheme, token] =
-        authHeader.split(' ');
-
-    if (
-        scheme !== 'Bearer' ||
-        !token
-    ) {
-        return res.status(401).json({
-            success: false,
-            error: 'Invalid authorization header'
-        });
-    }
-
-    try {
-        const decoded = jwt.verify(
-            token,
-            JWT_SECRET
-        );
-
-        req.employee_id =
-            decoded.employee_id;
-
-        next();
-
-    } catch (error) {
-        return res.status(401).json({
-            success: false,
-            error: 'Invalid or expired token'
-        });
-    }
-}
-
-
-// ============================================================
 // CURRENT AUTHENTICATED EMPLOYEE
 // ============================================================
 
 app.get(
     '/api/auth/me',
-    authenticateToken,
     (req, res) => {
 
         try {
@@ -435,7 +368,6 @@ const completeEvent = db.prepare(`
 
 app.post(
     '/api/usage/events',
-    authenticateToken,
     (req, res) => {
 
         const body = req.body || {};
@@ -445,8 +377,9 @@ app.post(
         // ----------------------------------------------------
 
         const {
-            // IMPORTANT:
-            // These now come from the AI extension.
+            // EMAIL NOW COMES FROM THE AI WEBSITE / EXTENSION
+            email,
+
             provider,
             product,
             event_type,
@@ -464,10 +397,30 @@ app.post(
         } = body;
 
         // ----------------------------------------------------
-        // EMPLOYEE ID FROM AUTHENTICATED USER
+        // FIND EMPLOYEE BY EMAIL
         // ----------------------------------------------------
 
-        const employeeId = req.employee_id;
+        if (!email || typeof email !== 'string') {
+            return res.status(400).json({
+                error: 'email is required'
+            });
+        }
+
+        const employee = db.prepare(`
+            SELECT
+                id,
+                email
+            FROM employees
+            WHERE LOWER(email) = LOWER(?)
+        `).get(email);
+
+        if (!employee) {
+            return res.status(404).json({
+                error: 'Employee not found'
+            });
+        }
+
+        const employeeId = employee.id;
 
         // ----------------------------------------------------
         // PROVIDER / PRODUCT
@@ -486,7 +439,6 @@ app.post(
         // ----------------------------------------------------
 
         if (
-            !employeeId ||
             typeof event_type !== 'string' ||
             !occurred_at
         ) {
@@ -504,6 +456,7 @@ app.post(
             '[ai-obs] EVENT:',
             {
                 employee_id: employeeId,
+                email: employee.email,
                 provider: eventProvider,
                 product: eventProduct,
                 event_type,
@@ -542,24 +495,45 @@ app.post(
                     'interaction_completed'
                 ) {
 
-                    const result = completeEvent.run({
-                        employee_id: employeeId,
-                        provider: eventProvider,
-                        product: eventProduct,
-                        interaction_id: interactionId,
+                    const result =
+                        completeEvent.run({
 
-                        latency_ms: latency_ms ?? null,
+                            employee_id:
+                                employeeId,
 
-                        prompt_length: prompt_length ?? null,
-                        response_length: response_length ?? null,
+                            provider:
+                                eventProvider,
 
-                        prompt_tokens: prompt_tokens ?? null,
-                        response_tokens: response_tokens ?? null,
-                        total_tokens: total_tokens ?? null,
+                            product:
+                                eventProduct,
 
-                        model: model ?? null,
-                        metadata: metadataJson
-                    });
+                            interaction_id:
+                                interactionId,
+
+                            latency_ms:
+                                latency_ms ?? null,
+
+                            prompt_length:
+                                prompt_length ?? null,
+
+                            response_length:
+                                response_length ?? null,
+
+                            prompt_tokens:
+                                prompt_tokens ?? null,
+
+                            response_tokens:
+                                response_tokens ?? null,
+
+                            total_tokens:
+                                total_tokens ?? null,
+
+                            model:
+                                model ?? null,
+
+                            metadata:
+                                metadataJson
+                        });
 
                     return {
                         inserted:
@@ -575,51 +549,52 @@ app.post(
                 // =================================================
 
                 const result =
-                insertEvent.run({
-                    employee_id:
-                        employeeId,
+                    insertEvent.run({
 
-                    provider:
-                        eventProvider,
+                        employee_id:
+                            employeeId,
 
-                    product:
-                        eventProduct,
+                        provider:
+                            eventProvider,
 
-                    event_type,
+                        product:
+                            eventProduct,
 
-                    session_id:
-                        session_id ?? null,
+                        event_type,
 
-                    interaction_id:
-                        interactionId,
+                        session_id:
+                            session_id ?? null,
 
-                    model:
-                        model ?? null,
+                        interaction_id:
+                            interactionId,
 
-                    occurred_at,
+                        model:
+                            model ?? null,
 
-                    latency_ms:
-                        latency_ms ?? null,
+                        occurred_at,
 
-                    prompt_length:
-                        prompt_length ?? null,
+                        latency_ms:
+                            latency_ms ?? null,
 
-                    response_length:
-                        response_length ?? null,
+                        prompt_length:
+                            prompt_length ?? null,
 
-                    // TOKEN ESTIMATES
-                    prompt_tokens:
-                        prompt_tokens ?? null,
+                        response_length:
+                            response_length ?? null,
 
-                    response_tokens:
-                        response_tokens ?? null,
+                        // TOKEN ESTIMATES
+                        prompt_tokens:
+                            prompt_tokens ?? null,
 
-                    total_tokens:
-                        total_tokens ?? null,
+                        response_tokens:
+                            response_tokens ?? null,
 
-                    metadata:
-                        metadataJson
-                });
+                        total_tokens:
+                            total_tokens ?? null,
+
+                        metadata:
+                            metadataJson
+                    });
 
                 return {
                     inserted:
@@ -649,6 +624,12 @@ app.post(
                     inserted
                         ? event_id
                         : null,
+
+                employee_id:
+                    employeeId,
+
+                email:
+                    employee.email,
 
                 provider:
                     eventProvider,

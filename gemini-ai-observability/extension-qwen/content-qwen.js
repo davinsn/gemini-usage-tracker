@@ -6,7 +6,7 @@ console.log('[qwen-obs] ===============================');
 (() => {
 
     console.log('[qwen-obs] IIFE STARTED');
-    console.log('[qwen-obs] VERSION = API-V2 + TOKEN-ESTIMATION');
+    console.log('[qwen-obs] VERSION = API-V3 + TOKEN-ESTIMATION');
     console.log('[qwen-obs] ACCOUNT DETECTION = QWEN AUTH API ONLY');
     console.log('[qwen-obs] DOM ACCOUNT DETECTION = DISABLED');
 
@@ -28,35 +28,20 @@ console.log('[qwen-obs] ===============================');
     // ============================================================
     // QWEN ACCOUNT API
     // ============================================================
-    //
-    // Confirmed from Qwen Network traffic:
-    //
-    // GET https://chat.qwen.ai/api/v1/auths/
-    //
-    // Example response:
-    //
-    // {
-    //     "id": "...",
-    //     "email": "...",
-    //     "name": "...",
-    //     "role": "user",
-    //     "token": "...",
-    //     ...
-    // }
-    //
-    // We ONLY use the email.
-    //
-    // We DO NOT read, log, store, or transmit the JWT token.
-    // ============================================================
 
-    const QWEN_AUTH_ENDPOINT =
-        '/api/v1/auths/';
+    const QWEN_AUTH_ENDPOINT = '/api/v1/auths/';
 
     const EMAIL_REGEX =
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     // ============================================================
-    // EXTRACT EMAIL FROM AUTH API RESPONSE
+    // MODEL
+    // ============================================================
+
+    const REQUEST_MODEL = 'qwen3.7-plus';
+
+    // ============================================================
+    // EXTRACT EMAIL
     // ============================================================
 
     const extractEmailFromAuthResponse = (data) => {
@@ -65,15 +50,15 @@ console.log('[qwen-obs] ===============================');
             return null;
         }
 
-        const candidate =
-            data.email;
+        const candidate = data.email;
 
         if (typeof candidate !== 'string') {
             return null;
         }
 
-        const email =
-            candidate.trim().toLowerCase();
+        const email = candidate
+            .trim()
+            .toLowerCase();
 
         if (!EMAIL_REGEX.test(email)) {
             return null;
@@ -115,21 +100,16 @@ console.log('[qwen-obs] ===============================');
 
         try {
 
-            console.log(
-                '[qwen-obs] Requesting authenticated Qwen account...'
-            );
-
-            const response =
-                await fetch(
-                    QWEN_AUTH_ENDPOINT,
-                    {
-                        method: 'GET',
-                        credentials: 'include',
-                        headers: {
-                            'Accept': 'application/json'
-                        }
+            const response = await fetch(
+                QWEN_AUTH_ENDPOINT,
+                {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json'
                     }
-                );
+                }
+            );
 
             console.log(
                 '[qwen-obs] Qwen auth API status:',
@@ -164,15 +144,16 @@ console.log('[qwen-obs] ===============================');
                 return null;
             }
 
-            const data =
-                await response.json();
+            /*
+             * IMPORTANT:
+             *
+             * Do NOT console.log(data).
+             *
+             * The response may contain a JWT token.
+             */
 
-            // IMPORTANT:
-            // Do NOT console.log(data).
-            //
-            // The response contains a JWT token.
-            // Logging the entire object would expose it.
-            //
+            const data = await response.json();
+
             console.log(
                 '[qwen-obs] Qwen auth response received'
             );
@@ -229,8 +210,7 @@ console.log('[qwen-obs] ===============================');
 
     let employeeEmail = null;
 
-    let collectorInitialized =
-        false;
+    let collectorInitialized = false;
 
     // ============================================================
     // TOKEN ESTIMATION
@@ -248,13 +228,11 @@ console.log('[qwen-obs] ===============================');
          * Approximation:
          * ~1 token per 4 characters.
          *
-         * This is NOT an official Qwen tokenizer.
+         * This is NOT the official Qwen tokenizer.
          * It is intended for usage estimation only.
          */
 
-        return Math.ceil(
-            text.length / 4
-        );
+        return Math.ceil(text.length / 4);
     };
 
     // ============================================================
@@ -287,8 +265,7 @@ console.log('[qwen-obs] ===============================');
         // SESSION
         // ========================================================
 
-        const sessionId =
-            crypto.randomUUID();
+        const sessionId = crypto.randomUUID();
 
         let activeInteraction = null;
 
@@ -298,9 +275,13 @@ console.log('[qwen-obs] ===============================');
 
         let completionTimer = null;
 
-        // Prevent Enter + Send button from firing twice
-
         let lastInteractionStartedAt = 0;
+
+        /*
+         * Track the response that existed before the interaction.
+         * This prevents an old response from being counted.
+         */
+        let previousResponseSnapshot = '';
 
         console.log(
             '[qwen-obs] ================================='
@@ -318,6 +299,11 @@ console.log('[qwen-obs] ===============================');
         console.log(
             '[qwen-obs] Session:',
             sessionId
+        );
+
+        console.log(
+            '[qwen-obs] Model:',
+            REQUEST_MODEL
         );
 
         console.log(
@@ -341,31 +327,21 @@ console.log('[qwen-obs] ===============================');
 
             const payload = {
 
-                type:
-                    'QWEN_USAGE_EVENT',
+                type: 'QWEN_USAGE_EVENT',
 
-                provider:
-                    'alibaba',
+                provider: 'alibaba',
 
-                product:
-                    'qwen',
+                product: 'qwen',
 
-                employeeEmail:
-                    employeeEmail,
+                employeeEmail: employeeEmail,
 
                 event: {
 
-                    email:
-                        employeeEmail,
+                    email: employeeEmail,
 
-                    employeeEmail:
-                        employeeEmail,
+                    provider: 'alibaba',
 
-                    provider:
-                        'alibaba',
-
-                    product:
-                        'qwen',
+                    product: 'qwen',
 
                     department:
                         cfg.department ?? null,
@@ -401,16 +377,14 @@ console.log('[qwen-obs] ===============================');
                 event.event_type
             );
 
-            console.log(
-                '[qwen-obs] payload:',
-                payload
-            );
+            /*
+             * Do NOT log the complete payload.
+             *
+             * It may contain prompt/response information.
+             */
 
-            console.log(
-                '[qwen-obs] ==============================='
-            );
-
-            chrome.runtime.sendMessage(payload)
+            chrome.runtime
+                .sendMessage(payload)
                 .then(response => {
 
                     console.log(
@@ -431,8 +405,8 @@ console.log('[qwen-obs] ===============================');
                     console.log(
                         '[qwen-obs] EVENT ACCEPTED BY SERVICE WORKER'
                     );
-                })
 
+                })
                 .catch(error => {
 
                     console.error(
@@ -497,7 +471,6 @@ console.log('[qwen-obs] ===============================');
                 input instanceof HTMLTextAreaElement ||
                 input instanceof HTMLInputElement
             ) {
-
                 return input.value || '';
             }
 
@@ -509,13 +482,76 @@ console.log('[qwen-obs] ===============================');
         };
 
         // ========================================================
+        // GET QWEN RESPONSE
+        // ========================================================
+
+        const getQwenResponseText = () => {
+
+            const selectorCandidates = [
+
+                '[data-message-author-role="assistant"]',
+
+                '[class*="assistant" i] [class*="markdown" i]',
+
+                '[class*="response" i] [class*="markdown" i]',
+
+                '[class*="markdown" i]'
+            ];
+
+            let candidates = [];
+
+            for (
+                const selector
+                of selectorCandidates
+            ) {
+
+                candidates = [
+                    ...document.querySelectorAll(selector)
+                ];
+
+                if (candidates.length) {
+                    break;
+                }
+            }
+
+            const visible =
+                candidates.filter(el => {
+
+                    const rect =
+                        el.getBoundingClientRect();
+
+                    return (
+                        rect.width > 0 &&
+                        rect.height > 0
+                    );
+                });
+
+            if (!visible.length) {
+                return '';
+            }
+
+            const latest =
+                visible[visible.length - 1];
+
+            return (
+                latest.innerText ||
+                latest.textContent ||
+                ''
+            ).trim();
+        };
+
+        // ========================================================
         // START INTERACTION
         // ========================================================
 
         const startInteraction = () => {
 
-            const now =
-                Date.now();
+            const now = Date.now();
+
+            /*
+             * Prevent Enter + Send button
+             * from creating two interactions.
+             */
 
             if (
                 now -
@@ -530,8 +566,7 @@ console.log('[qwen-obs] ===============================');
                 return;
             }
 
-            lastInteractionStartedAt =
-                now;
+            lastInteractionStartedAt = now;
 
             const input =
                 findPromptInput();
@@ -559,6 +594,14 @@ console.log('[qwen-obs] ===============================');
                 return;
             }
 
+            /*
+             * Capture whatever response existed before
+             * this interaction.
+             */
+
+            previousResponseSnapshot =
+                getQwenResponseText();
+
             console.log(
                 '[qwen-obs] ================================='
             );
@@ -568,13 +611,16 @@ console.log('[qwen-obs] ===============================');
             );
 
             console.log(
-                '[qwen-obs] Prompt:',
-                prompt
-            );
-
-            console.log(
                 '[qwen-obs] Prompt length:',
                 prompt.length
+            );
+
+            const model =
+                REQUEST_MODEL || 'unknown';
+
+            console.log(
+                '[qwen-obs] Model:',
+                model
             );
 
             const promptTokens =
@@ -635,11 +681,16 @@ console.log('[qwen-obs] ===============================');
 
                 prompt,
 
+                model,
+
                 promptLength:
                     prompt.length,
 
                 promptTokens:
-                    promptTokens
+                    promptTokens,
+
+                previousResponse:
+                    previousResponseSnapshot
             };
 
             send({
@@ -650,6 +701,9 @@ console.log('[qwen-obs] ===============================');
                 interaction_id:
                     interactionId,
 
+                model:
+                    model,
+
                 prompt_length:
                     prompt.length,
 
@@ -659,7 +713,7 @@ console.log('[qwen-obs] ===============================');
                 metadata: {
 
                     collector:
-                        'api-v2',
+                        'api-v3',
 
                     prompt_capture:
                         'pre-submit',
@@ -670,69 +724,6 @@ console.log('[qwen-obs] ===============================');
             });
 
             lastKnownPrompt = '';
-        };
-
-        // ========================================================
-        // QWEN RESPONSE
-        // ========================================================
-
-        const getQwenResponseText = () => {
-
-            const selectorCandidates = [
-
-                '[data-message-author-role="assistant"]',
-
-                '[class*="assistant" i] [class*="markdown" i]',
-
-                '[class*="response" i] [class*="markdown" i]',
-
-                '[class*="markdown" i]'
-            ];
-
-            let candidates = [];
-
-            for (
-                const selector
-                of selectorCandidates
-            ) {
-
-                candidates = [
-                    ...document.querySelectorAll(
-                        selector
-                    )
-                ];
-
-                if (candidates.length) {
-                    break;
-                }
-            }
-
-            const visible =
-                candidates.filter(el => {
-
-                    const rect =
-                        el.getBoundingClientRect();
-
-                    return (
-                        rect.width > 0 &&
-                        rect.height > 0
-                    );
-                });
-
-            if (!visible.length) {
-                return '';
-            }
-
-            const latest =
-                visible[
-                    visible.length - 1
-                ];
-
-            return (
-                latest.innerText ||
-                latest.textContent ||
-                ''
-            ).trim();
         };
 
         // ========================================================
@@ -751,6 +742,38 @@ console.log('[qwen-obs] ===============================');
             const response =
                 getQwenResponseText();
 
+            /*
+             * Don't complete if Qwen has not produced
+             * a response yet.
+             */
+
+            if (!response) {
+
+                console.log(
+                    '[qwen-obs] Waiting for Qwen response...'
+                );
+
+                return;
+            }
+
+            /*
+             * If the response is exactly the same as the
+             * response that existed before submission,
+             * it is probably the old response.
+             */
+
+            if (
+                interaction.previousResponse &&
+                response === interaction.previousResponse
+            ) {
+
+                console.log(
+                    '[qwen-obs] Response unchanged; waiting...'
+                );
+
+                return;
+            }
+
             const latency =
                 Date.now() -
                 interaction.startedAt;
@@ -764,6 +787,10 @@ console.log('[qwen-obs] ===============================');
             const totalTokens =
                 interaction.promptTokens +
                 responseTokens;
+
+            console.log(
+                '[qwen-obs] ================================='
+            );
 
             console.log(
                 '[qwen-obs] COMPLETING INTERACTION'
@@ -799,6 +826,10 @@ console.log('[qwen-obs] ===============================');
                 totalTokens
             );
 
+            console.log(
+                '[qwen-obs] ================================='
+            );
+
             send({
 
                 event_type:
@@ -806,6 +837,9 @@ console.log('[qwen-obs] ===============================');
 
                 interaction_id:
                     interaction.interactionId,
+
+                model:
+                    interaction.model,
 
                 prompt_length:
                     interaction.promptLength,
@@ -828,7 +862,7 @@ console.log('[qwen-obs] ===============================');
                 metadata: {
 
                     collector:
-                        'api-v2',
+                        'api-v3',
 
                     completion_detection:
                         'mutation-idle',
@@ -870,9 +904,7 @@ console.log('[qwen-obs] ===============================');
                     input &&
                     (
                         event.target === input ||
-                        input.contains?.(
-                            event.target
-                        )
+                        input.contains?.(event.target)
                     );
 
                 if (!targetIsInput) {
@@ -893,9 +925,7 @@ console.log('[qwen-obs] ===============================');
             event => {
 
                 const button =
-                    event.target?.closest?.(
-                        'button'
-                    );
+                    event.target?.closest?.('button');
 
                 if (!button) {
                     return;
@@ -918,9 +948,7 @@ console.log('[qwen-obs] ===============================');
                     .join(' ');
 
                 const isSend =
-                    /send|submit|ask/i.test(
-                        combined
-                    ) &&
+                    /send|submit|ask/i.test(combined) &&
                     !button.disabled;
 
                 if (!isSend) {
@@ -957,6 +985,19 @@ console.log('[qwen-obs] ===============================');
                             return;
                         }
 
+                        /*
+                         * Make sure response actually changed
+                         * from what existed before submission.
+                         */
+
+                        if (
+                            activeInteraction.previousResponse &&
+                            response ===
+                            activeInteraction.previousResponse
+                        ) {
+                            return;
+                        }
+
                         completeInteraction();
 
                     }, 2500);
@@ -986,12 +1027,16 @@ console.log('[qwen-obs] ===============================');
             metadata: {
 
                 collector:
-                    'api-v2',
+                    'api-v3',
 
                 url_host:
                     location.host
             }
         });
+
+        // ========================================================
+        // READY
+        // ========================================================
 
         console.log(
             '[qwen-obs] ================================='
@@ -1013,6 +1058,11 @@ console.log('[qwen-obs] ===============================');
         console.log(
             '[qwen-obs] Session:',
             sessionId
+        );
+
+        console.log(
+            '[qwen-obs] Model:',
+            REQUEST_MODEL
         );
 
         console.log(
