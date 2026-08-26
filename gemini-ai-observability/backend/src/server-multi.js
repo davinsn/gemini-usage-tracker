@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import DatabaseConstructor from 'better-sqlite3';
+import 'dotenv/config';
 
 const __dirname = path.dirname(
     fileURLToPath(import.meta.url)
@@ -22,6 +23,22 @@ const port =
 
 const DEFAULT_PROVIDER = 'google';
 const DEFAULT_PRODUCT = 'gemini';
+
+// ============================================================
+// OPENROUTER CONFIGURATION
+// ============================================================
+
+const OPENROUTER_API_KEY =
+    process.env.OPENROUTER_API_KEY || null;
+
+const OPENROUTER_ENDPOINT =
+    'https://openrouter.ai/api/v1/chat/completions';
+
+if (!OPENROUTER_API_KEY) {
+    console.warn(
+        '[ai-obs] WARNING: OPENROUTER_API_KEY is not set. OpenRouter API requests will fail.'
+    );
+}
 
 // ============================================================
 // DATABASE
@@ -96,6 +113,7 @@ app.use(
 
 app.get('/', (_req, res) => {
     try {
+
         db.prepare(
             'SELECT 1'
         ).get();
@@ -104,8 +122,15 @@ app.get('/', (_req, res) => {
             ok: true,
             service: 'ai-observability-api',
             db: 'sqlite',
-            defaultProvider: DEFAULT_PROVIDER,
-            defaultProduct: DEFAULT_PRODUCT
+
+            defaultProvider:
+                DEFAULT_PROVIDER,
+
+            defaultProduct:
+                DEFAULT_PRODUCT,
+
+            openrouter:
+                Boolean(OPENROUTER_API_KEY)
         });
 
     } catch (error) {
@@ -127,6 +152,7 @@ app.get('/', (_req, res) => {
 // ============================================================
 
 function validEmail(email) {
+
     return (
         typeof email === 'string' &&
         /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
@@ -134,6 +160,7 @@ function validEmail(email) {
 }
 
 function toNullableNumber(value) {
+
     if (
         value === null ||
         value === undefined ||
@@ -142,7 +169,8 @@ function toNullableNumber(value) {
         return null;
     }
 
-    const number = Number(value);
+    const number =
+        Number(value);
 
     return Number.isFinite(number)
         ? number
@@ -150,13 +178,99 @@ function toNullableNumber(value) {
 }
 
 function safeMetadata(metadata) {
+
     try {
+
         return JSON.stringify(
             metadata ?? {}
         );
+
     } catch {
+
         return JSON.stringify({});
     }
+}
+
+// ============================================================
+// OPENROUTER MODEL → PRODUCT
+// ============================================================
+
+function inferOpenRouterProduct(model) {
+
+    if (
+        typeof model !== 'string'
+    ) {
+        return 'openrouter';
+    }
+
+    const normalized =
+        model.toLowerCase();
+
+    // Qwen
+    if (
+        normalized.startsWith('qwen/')
+    ) {
+        return 'qwen';
+    }
+
+    // OpenAI
+    if (
+        normalized.startsWith('openai/')
+    ) {
+        return 'openai';
+    }
+
+    // Anthropic
+    if (
+        normalized.startsWith('anthropic/')
+    ) {
+        return 'claude';
+    }
+
+    // Google
+    if (
+        normalized.startsWith('google/')
+    ) {
+        return 'gemini';
+    }
+
+    // Meta
+    if (
+        normalized.startsWith('meta-llama/')
+    ) {
+        return 'llama';
+    }
+
+    // Mistral
+    if (
+        normalized.startsWith('mistralai/')
+    ) {
+        return 'mistral';
+    }
+
+    // DeepSeek
+    if (
+        normalized.startsWith('deepseek/')
+    ) {
+        return 'deepseek';
+    }
+
+    // Microsoft
+    if (
+        normalized.startsWith('microsoft/')
+    ) {
+        return 'phi';
+    }
+
+    // xAI
+    if (
+        normalized.startsWith('x-ai/')
+    ) {
+        return 'grok';
+    }
+
+    // Default
+    return 'openrouter';
 }
 
 // ============================================================
@@ -182,7 +296,8 @@ app.post(
 
                 return res.status(400).json({
                     success: false,
-                    error: 'A valid email is required'
+                    error:
+                        'A valid email is required'
                 });
             }
 
@@ -193,7 +308,8 @@ app.post(
 
                 return res.status(400).json({
                     success: false,
-                    error: 'Password is required'
+                    error:
+                        'Password is required'
                 });
             }
 
@@ -217,7 +333,8 @@ app.post(
 
                 return res.status(401).json({
                     success: false,
-                    error: 'Invalid email or password'
+                    error:
+                        'Invalid email or password'
                 });
             }
 
@@ -244,7 +361,8 @@ app.post(
 
                 return res.status(401).json({
                     success: false,
-                    error: 'Invalid email or password'
+                    error:
+                        'Invalid email or password'
                 });
             }
 
@@ -254,11 +372,14 @@ app.post(
 
             res.json({
                 success: true,
+
                 employee: {
                     id: employee.id,
                     email: employee.email,
-                    department: employee.department,
-                    role: employee.role
+                    department:
+                        employee.department,
+                    role:
+                        employee.role
                 }
             });
 
@@ -315,7 +436,8 @@ app.get(
 
                 return res.status(404).json({
                     success: false,
-                    error: 'Employee not found'
+                    error:
+                        'Employee not found'
                 });
             }
 
@@ -333,7 +455,8 @@ app.get(
 
             res.status(500).json({
                 success: false,
-                error: 'auth_check_failed'
+                error:
+                    'auth_check_failed'
             });
         }
     }
@@ -407,6 +530,481 @@ const completeEvent =
     `);
 
 // ============================================================
+// OPENROUTER CHAT API
+// ============================================================
+//
+// POST /api/openrouter/chat
+//
+// Example:
+//
+// {
+//     "email": "employee@example.com",
+//     "model": "qwen/qwen3-30b-a3b",
+//     "messages": [
+//         {
+//             "role": "user",
+//             "content": "Hello Qwen"
+//         }
+//     ],
+//     "session_id": "optional-session-id"
+// }
+//
+// ============================================================
+
+app.post(
+    '/api/openrouter/chat',
+    async (req, res) => {
+
+        try {
+
+            const {
+                email,
+                model,
+                messages,
+                session_id
+            } = req.body || {};
+
+            // ----------------------------------------------------
+            // API KEY
+            // ----------------------------------------------------
+
+            if (!OPENROUTER_API_KEY) {
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        'OpenRouter API key is not configured'
+                });
+            }
+
+            // ----------------------------------------------------
+            // EMAIL VALIDATION
+            // ----------------------------------------------------
+
+            if (
+                !email ||
+                typeof email !== 'string'
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        'email is required'
+                });
+            }
+
+            if (!validEmail(email)) {
+
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        'A valid email is required'
+                });
+            }
+
+            // ----------------------------------------------------
+            // MODEL VALIDATION
+            // ----------------------------------------------------
+
+            if (
+                !model ||
+                typeof model !== 'string'
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        'model is required'
+                });
+            }
+
+            // ----------------------------------------------------
+            // MESSAGES VALIDATION
+            // ----------------------------------------------------
+
+            if (
+                !Array.isArray(messages) ||
+                messages.length === 0
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        'messages must be a non-empty array'
+                });
+            }
+
+            // ----------------------------------------------------
+            // FIND EMPLOYEE
+            // ----------------------------------------------------
+
+            const employee =
+                db.prepare(`
+                    SELECT
+                        id,
+                        email
+                    FROM employees
+                    WHERE LOWER(email) = LOWER(?)
+                `).get(email);
+
+            if (!employee) {
+
+                return res.status(404).json({
+                    success: false,
+                    error:
+                        'Employee not found'
+                });
+            }
+
+            // ----------------------------------------------------
+            // INTERACTION ID
+            // ----------------------------------------------------
+
+            const interactionId =
+                crypto.randomUUID();
+
+            // ----------------------------------------------------
+            // SESSION ID
+            // ----------------------------------------------------
+
+            const sessionId =
+                session_id ||
+                crypto.randomUUID();
+
+            // ----------------------------------------------------
+            // PROMPT LENGTH
+            // ----------------------------------------------------
+
+            const promptText =
+                messages
+                    .filter(
+                        message =>
+                            message?.role === 'user'
+                    )
+                    .map(
+                        message =>
+                            typeof message.content === 'string'
+                                ? message.content
+                                : JSON.stringify(
+                                    message.content ?? ''
+                                )
+                    )
+                    .join('\n');
+
+            const promptLength =
+                promptText.length;
+
+            // ----------------------------------------------------
+            // START TIMER
+            // ----------------------------------------------------
+
+            const startTime =
+                Date.now();
+
+            // ----------------------------------------------------
+            // OPENROUTER REQUEST
+            // ----------------------------------------------------
+
+            const openRouterResponse =
+                await fetch(
+                    OPENROUTER_ENDPOINT,
+                    {
+                        method: 'POST',
+
+                        headers: {
+                            'Authorization':
+                                `Bearer ${OPENROUTER_API_KEY}`,
+
+                            'Content-Type':
+                                'application/json',
+
+                            'HTTP-Referer':
+                                'http://localhost:4000',
+
+                            'X-Title':
+                                'AI Observability Tracker'
+                        },
+
+                        body: JSON.stringify({
+                            model,
+                            messages
+                        })
+                    }
+                );
+
+            const data =
+                await openRouterResponse.json();
+
+            // ----------------------------------------------------
+            // LATENCY
+            // ----------------------------------------------------
+
+            const latencyMs =
+                Date.now() - startTime;
+
+            // ----------------------------------------------------
+            // OPENROUTER ERROR
+            // ----------------------------------------------------
+
+            if (!openRouterResponse.ok) {
+
+                console.error(
+                    '[ai-obs] OPENROUTER ERROR:',
+                    {
+                        status:
+                            openRouterResponse.status,
+
+                        model,
+
+                        data
+                    }
+                );
+
+                return res.status(
+                    openRouterResponse.status
+                ).json({
+                    success: false,
+                    error:
+                        'OpenRouter request failed',
+                    details:
+                        data
+                });
+            }
+
+            // ----------------------------------------------------
+            // RESPONSE MESSAGE
+            // ----------------------------------------------------
+
+            const responseMessage =
+                data?.choices?.[0]?.message;
+
+            const responseText =
+                typeof responseMessage?.content === 'string'
+                    ? responseMessage.content
+                    : '';
+
+            // ----------------------------------------------------
+            // ACTUAL MODEL USED
+            // ----------------------------------------------------
+
+            const actualModel =
+                data?.model ||
+                model;
+
+            // ----------------------------------------------------
+            // PRODUCT
+            // ----------------------------------------------------
+
+            const product =
+                inferOpenRouterProduct(
+                    actualModel
+                );
+
+            // ----------------------------------------------------
+            // TOKEN USAGE
+            // ----------------------------------------------------
+
+            const promptTokens =
+                toNullableNumber(
+                    data?.usage?.prompt_tokens ??
+                    data?.usage?.promptTokens
+                );
+
+            const responseTokens =
+                toNullableNumber(
+                    data?.usage?.completion_tokens ??
+                    data?.usage?.completionTokens
+                );
+
+            const totalTokens =
+                toNullableNumber(
+                    data?.usage?.total_tokens ??
+                    data?.usage?.totalTokens
+                );
+
+            // ----------------------------------------------------
+            // ADDITIONAL USAGE DETAILS
+            // ----------------------------------------------------
+
+            const usageMetadata = {
+                source:
+                    'openrouter',
+
+                api:
+                    true,
+
+                requested_model:
+                    model,
+
+                actual_model:
+                    actualModel,
+
+                finish_reason:
+                    data?.choices?.[0]?.finish_reason ??
+                    null,
+
+                usage:
+                    data?.usage ?? null
+            };
+
+            // ----------------------------------------------------
+            // INSERT EVENT
+            // ----------------------------------------------------
+
+            const result =
+                insertEvent.run({
+
+                    employee_id:
+                        employee.id,
+
+                    provider:
+                        'openrouter',
+
+                    product,
+
+                    event_type:
+                        'interaction_completed',
+
+                    session_id:
+                        sessionId,
+
+                    interaction_id:
+                        interactionId,
+
+                    model:
+                        actualModel,
+
+                    occurred_at:
+                        new Date().toISOString(),
+
+                    latency_ms:
+                        latencyMs,
+
+                    prompt_length:
+                        promptLength,
+
+                    response_length:
+                        responseText.length,
+
+                    prompt_tokens:
+                        promptTokens,
+
+                    response_tokens:
+                        responseTokens,
+
+                    total_tokens:
+                        totalTokens,
+
+                    metadata:
+                        safeMetadata(
+                            usageMetadata
+                        )
+                });
+
+            // ----------------------------------------------------
+            // LOG
+            // ----------------------------------------------------
+
+            console.log(
+                '[ai-obs] OPENROUTER EVENT:',
+                {
+                    employee_id:
+                        employee.id,
+
+                    email:
+                        employee.email,
+
+                    provider:
+                        'openrouter',
+
+                    product,
+
+                    model:
+                        actualModel,
+
+                    requested_model:
+                        model,
+
+                    interaction_id:
+                        interactionId,
+
+                    session_id:
+                        sessionId,
+
+                    latency_ms:
+                        latencyMs,
+
+                    prompt_tokens:
+                        promptTokens,
+
+                    response_tokens:
+                        responseTokens,
+
+                    total_tokens:
+                        totalTokens
+                }
+            );
+
+            // ----------------------------------------------------
+            // RESPONSE
+            // ----------------------------------------------------
+
+            return res.status(200).json({
+
+                success: true,
+
+                interaction_id:
+                    interactionId,
+
+                session_id:
+                    sessionId,
+
+                provider:
+                    'openrouter',
+
+                product,
+
+                model:
+                    actualModel,
+
+                response:
+                    responseText,
+
+                usage: {
+                    prompt_tokens:
+                        promptTokens,
+
+                    response_tokens:
+                        responseTokens,
+
+                    total_tokens:
+                        totalTokens
+                },
+
+                latency_ms:
+                    latencyMs,
+
+                event_id:
+                    result.lastInsertRowid
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] OPENROUTER REQUEST ERROR:',
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    'openrouter_request_failed'
+            });
+        }
+    }
+);
+
+// ============================================================
 // EVENT INGESTION
 // ============================================================
 
@@ -448,7 +1046,8 @@ app.post(
 
                 return res.status(400).json({
                     accepted: false,
-                    error: 'email is required'
+                    error:
+                        'email is required'
                 });
             }
 
@@ -474,7 +1073,8 @@ app.post(
 
                 return res.status(404).json({
                     accepted: false,
-                    error: 'Employee not found'
+                    error:
+                        'Employee not found'
                 });
             }
 
@@ -574,13 +1174,24 @@ app.post(
             console.log(
                 '[ai-obs] EVENT:',
                 {
-                    employee_id: employeeId,
-                    email: employee.email,
-                    provider: eventProvider,
-                    product: eventProduct,
+                    employee_id:
+                        employeeId,
+
+                    email:
+                        employee.email,
+
+                    provider:
+                        eventProvider,
+
+                    product:
+                        eventProduct,
+
                     event_type,
+
                     session_id,
-                    interaction_id: interactionId
+
+                    interaction_id:
+                        interactionId
                 }
             );
 
@@ -604,6 +1215,7 @@ app.post(
 
                 const result =
                     completeEvent.run({
+
                         employee_id:
                             employeeId,
 
@@ -650,19 +1262,29 @@ app.post(
                 ) {
 
                     return res.status(404).json({
+
                         accepted: false,
+
                         inserted: false,
+
                         updated: false,
+
                         changes: 0,
+
                         event_id: null,
+
                         employee_id:
                             employeeId,
+
                         email:
                             employee.email,
+
                         provider:
                             eventProvider,
+
                         product:
                             eventProduct,
+
                         error:
                             'interaction_not_found'
                     });
@@ -690,20 +1312,29 @@ app.post(
                     );
 
                 return res.status(200).json({
+
                     accepted: true,
+
                     inserted: false,
+
                     updated: true,
+
                     changes:
                         result.changes,
+
                     event_id:
                         updatedEvent?.id ??
                         null,
+
                     employee_id:
                         employeeId,
+
                     email:
                         employee.email,
+
                     provider:
                         eventProvider,
+
                     product:
                         eventProduct
                 });
@@ -715,6 +1346,7 @@ app.post(
 
             const result =
                 insertEvent.run({
+
                     employee_id:
                         employeeId,
 
@@ -770,6 +1402,7 @@ app.post(
             return res.status(
                 inserted ? 201 : 200
             ).json({
+
                 accepted: true,
 
                 inserted,
@@ -842,6 +1475,7 @@ app.get(
                 row =
                     db.prepare(`
                         SELECT
+
                             COUNT(*) FILTER (
                                 WHERE event_type =
                                     'interaction_completed'
@@ -892,6 +1526,7 @@ app.get(
                 row =
                     db.prepare(`
                         SELECT
+
                             COUNT(*) FILTER (
                                 WHERE event_type =
                                     'interaction_completed'
@@ -1019,7 +1654,9 @@ app.get(
                 rows =
                     db.prepare(`
                         SELECT
+
                             e.email,
+
                             e.department,
 
                             COUNT(u.id) FILTER (
@@ -1080,7 +1717,9 @@ app.get(
                 rows =
                     db.prepare(`
                         SELECT
+
                             e.email,
+
                             e.department,
 
                             COUNT(u.id) FILTER (
@@ -1169,7 +1808,9 @@ app.get(
                 rows =
                     db.prepare(`
                         SELECT
+
                             provider,
+
                             product,
 
                             COUNT(*) FILTER (
@@ -1221,7 +1862,9 @@ app.get(
                 rows =
                     db.prepare(`
                         SELECT
+
                             provider,
+
                             product,
 
                             COUNT(*) FILTER (
@@ -1297,6 +1940,7 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
+
                         provider,
 
                         COUNT(*) FILTER (
@@ -1380,7 +2024,9 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
+
                         provider,
+
                         product,
 
                         COUNT(*) FILTER (
@@ -1462,9 +2108,13 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
+
                         e.email,
+
                         e.department,
+
                         u.provider,
+
                         u.product,
 
                         COUNT(u.id) FILTER (
@@ -1509,6 +2159,7 @@ app.get(
                         AND u.product IS NOT NULL
 
                     GROUP BY
+
                         e.id,
                         e.email,
                         e.department,
@@ -1563,23 +2214,41 @@ app.get(
             const rows =
                 db.prepare(`
                     SELECT
+
                         u.id,
+
                         e.email,
+
                         e.department,
+
                         e.role,
+
                         u.provider,
+
                         u.product,
+
                         u.event_type,
+
                         u.session_id,
+
                         u.interaction_id,
+
                         u.model,
+
                         u.occurred_at,
+
                         u.latency_ms,
+
                         u.prompt_length,
+
                         u.response_length,
+
                         u.prompt_tokens,
+
                         u.response_tokens,
+
                         u.total_tokens,
+
                         u.metadata
 
                     FROM usage_events u
@@ -1661,9 +2330,7 @@ app.get(
             const rate =
                 usd?.rate;
 
-            if (
-                !rate
-            ) {
+            if (!rate) {
 
                 return res.status(502).json({
                     success: false,
@@ -1702,11 +2369,14 @@ app.get(
                     );
 
             res.json({
+
                 success: true,
 
-                currency: 'USD',
+                currency:
+                    'USD',
 
-                target_currency: 'MYR',
+                target_currency:
+                    'MYR',
 
                 unit:
                     usd.unit ?? 1,
@@ -1763,6 +2433,166 @@ app.get(
     }
 );
 
+
+// ============================================================
+// OPENROUTER / QWEN CHAT
+// ============================================================
+
+app.post(
+    '/api/ai/chat',
+    async (req, res) => {
+
+        try {
+
+            if (!OPENROUTER_API_KEY) {
+                return res.status(500).json({
+                    success: false,
+                    error: 'OpenRouter API key is not configured'
+                });
+            }
+
+            const {
+                messages,
+                model
+            } = req.body || {};
+
+            if (
+                !Array.isArray(messages) ||
+                messages.length === 0
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'messages are required'
+                });
+            }
+
+            const selectedModel =
+                model ||
+                OPENROUTER_MODEL;
+
+            const startTime = Date.now();
+
+            const response = await fetch(
+                OPENROUTER_URL,
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${OPENROUTER_API_KEY}`,
+
+                        'Content-Type':
+                            'application/json',
+
+                        'HTTP-Referer':
+                            'http://localhost:4000',
+
+                        'X-Title':
+                            'AI Observability Tracker'
+                    },
+
+                    body: JSON.stringify({
+                        model: selectedModel,
+                        messages
+                    })
+                }
+            );
+
+            const data = await response.json();
+
+            const latency =
+                Date.now() - startTime;
+
+            if (!response.ok) {
+
+                console.error(
+                    '[ai-obs] OPENROUTER ERROR:',
+                    data
+                );
+
+                return res.status(response.status).json({
+                    success: false,
+                    error:
+                        data?.error?.message ||
+                        'OpenRouter request failed'
+                });
+            }
+
+            const usage =
+                data?.usage || {};
+
+            const promptTokens =
+                usage.prompt_tokens ?? null;
+
+            const responseTokens =
+                usage.completion_tokens ?? null;
+
+            const totalTokens =
+                usage.total_tokens ??
+                (
+                    promptTokens !== null &&
+                    responseTokens !== null
+                        ? promptTokens + responseTokens
+                        : null
+                );
+
+            const assistantMessage =
+                data?.choices?.[0]?.message?.content ??
+                '';
+
+            console.log(
+                '[ai-obs] OPENROUTER SUCCESS:',
+                {
+                    model: selectedModel,
+                    latency,
+                    promptTokens,
+                    responseTokens,
+                    totalTokens
+                }
+            );
+
+            return res.json({
+                success: true,
+
+                model:
+                    data?.model ||
+                    selectedModel,
+
+                response:
+                    assistantMessage,
+
+                usage: {
+                    prompt_tokens:
+                        promptTokens,
+
+                    response_tokens:
+                        responseTokens,
+
+                    total_tokens:
+                        totalTokens
+                },
+
+                latency_ms:
+                    latency,
+
+                raw: data
+            });
+
+        } catch (error) {
+
+            console.error(
+                '[ai-obs] OPENROUTER REQUEST ERROR:',
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error: 'OpenRouter request failed'
+            });
+        }
+    }
+);
+
 // ============================================================
 // 404 API HANDLER
 // ============================================================
@@ -1773,7 +2603,8 @@ app.use(
 
         res.status(404).json({
             success: false,
-            error: 'API endpoint not found'
+            error:
+                'API endpoint not found'
         });
     }
 );
@@ -1800,6 +2631,14 @@ app.listen(
 
         console.log(
             `[ai-obs] Default product: ${DEFAULT_PRODUCT}`
+        );
+
+        console.log(
+            `[ai-obs] OpenRouter: ${
+                OPENROUTER_API_KEY
+                    ? 'CONFIGURED'
+                    : 'NOT CONFIGURED'
+            }`
         );
 
         console.log(
