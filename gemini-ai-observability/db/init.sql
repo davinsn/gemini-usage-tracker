@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS employees (
 
     status TEXT NOT NULL DEFAULT 'active',
 
+    password_hash TEXT,
+
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
