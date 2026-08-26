@@ -1,5 +1,6 @@
 // ============================================================
 // AI OBSERVABILITY - MULTI-AI DASHBOARD
+// DASHBOARD.JS
 // ============================================================
 
 // ============================================================
@@ -12,30 +13,13 @@ let providerSessionChart;
 let employeeAiChart;
 let latencyChart;
 let providerTokenChart;
-
+let tokenTypeChart;
 
 // ============================================================
-// CHART CONFIGURATION
+// GLOBAL DATA
 // ============================================================
 
-const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-
-    plugins: {
-        legend: {
-            display: true
-        }
-    },
-
-    scales: {
-        y: {
-            beginAtZero: true
-        }
-    }
-};
-
+let currentBnmRate = null;
 
 // ============================================================
 // AI PRODUCT CONFIGURATION
@@ -71,8 +55,8 @@ const AI_PRODUCTS = {
         name: 'Perplexity',
         provider: 'Perplexity',
         color: '#20B8CD'
-
     },
+
     qwen: {
         name: 'Qwen',
         provider: 'Alibaba',
@@ -80,45 +64,83 @@ const AI_PRODUCTS = {
     }
 };
 
-
 // ============================================================
-// FALLBACK COLOUR
+// PRICING
 // ============================================================
-
-const DEFAULT_CHART_COLOR = '#64748B';
-
-
-// ============================================================
-// GET AI COLOUR
+//
+// USD PER TOKEN
+//
 // ============================================================
 
-function getProductColor(product) {
+const AI_PRICING = {
 
-    if (!product) {
-        return DEFAULT_CHART_COLOR;
+    gemini: {
+        input: 0.0000001,
+        output: 0.0000004
+    },
+
+    chatgpt: {
+        input: 0.000005,
+        output: 0.000015
+    },
+
+    claude: {
+        input: 0.000003,
+        output: 0.000015
+    },
+
+    copilot: {
+        input: 0.000005,
+        output: 0.000015
+    },
+
+    perplexity: {
+        input: 0.000001,
+        output: 0.000001
+    },
+
+    qwen: {
+        input: 0.000001,
+        output: 0.000002
+    }
+};
+
+// ============================================================
+// DEFAULT CHART COLOUR
+// ============================================================
+
+const DEFAULT_CHART_COLOR =
+    '#64748B';
+
+// ============================================================
+// CHART OPTIONS
+// ============================================================
+
+const chartOptions = {
+
+    responsive: true,
+
+    maintainAspectRatio: false,
+
+    animation: false,
+
+    plugins: {
+
+        legend: {
+            display: true
+        }
+
+    },
+
+    scales: {
+
+        y: {
+            beginAtZero: true
+        }
+
     }
 
-    const key = String(product).toLowerCase();
-
-    if (AI_PRODUCTS[key]) {
-        return AI_PRODUCTS[key].color;
-    }
-
-    return DEFAULT_CHART_COLOR;
-}
-
-
-// ============================================================
-// GET AI COLOURS FOR ARRAY
-// ============================================================
-
-function getProductColors(products) {
-
-    return products.map(product =>
-        getProductColor(product)
-    );
-}
-
+};
 
 // ============================================================
 // NUMBER FORMATTER
@@ -126,7 +148,8 @@ function getProductColors(products) {
 
 function formatNumber(value) {
 
-    const number = Number(value);
+    const number =
+        Number(value);
 
     if (!Number.isFinite(number)) {
         return '0';
@@ -135,9 +158,46 @@ function formatNumber(value) {
     return number.toLocaleString();
 }
 
+// ============================================================
+// USD FORMATTER
+// ============================================================
+
+function formatUsd(value) {
+
+    const number =
+        Number(value);
+
+    if (!Number.isFinite(number)) {
+        return '$0.00';
+    }
+
+    return (
+        '$' +
+        number.toFixed(2)
+    );
+}
 
 // ============================================================
-// TOKEN VALUE HELPER
+// MYR FORMATTER
+// ============================================================
+
+function formatMyr(value) {
+
+    const number =
+        Number(value);
+
+    if (!Number.isFinite(number)) {
+        return 'RM0.00';
+    }
+
+    return (
+        'RM' +
+        number.toFixed(2)
+    );
+}
+
+// ============================================================
+// TOKEN VALUE
 // ============================================================
 
 function getTokenValue(row) {
@@ -154,6 +214,336 @@ function getTokenValue(row) {
     ) || 0;
 }
 
+// ============================================================
+// PROMPT TOKENS
+// ============================================================
+
+function getPromptTokens(row) {
+
+    if (!row) {
+        return 0;
+    }
+
+    return Number(
+        row.prompt_tokens ??
+        row.input_tokens ??
+        0
+    ) || 0;
+}
+
+// ============================================================
+// RESPONSE TOKENS
+// ============================================================
+
+function getResponseTokens(row) {
+
+    if (!row) {
+        return 0;
+    }
+
+    return Number(
+        row.response_tokens ??
+        row.completion_tokens ??
+        row.output_tokens ??
+        0
+    ) || 0;
+}
+
+// ============================================================
+// PRODUCT COST
+// ============================================================
+
+function calculateCost(
+    product,
+    promptTokens,
+    responseTokens
+) {
+
+    const key =
+        String(
+            product || ''
+        ).toLowerCase();
+
+    const pricing =
+        AI_PRICING[key];
+
+    if (!pricing) {
+        return 0;
+    }
+
+    const inputTokens =
+        Number(promptTokens) || 0;
+
+    const outputTokens =
+        Number(responseTokens) || 0;
+
+    return (
+        inputTokens *
+        pricing.input
+    ) + (
+        outputTokens *
+        pricing.output
+    );
+}
+
+// ============================================================
+// COST FOR ROW
+// ============================================================
+
+function getRowCost(row) {
+
+    if (!row) {
+        return 0;
+    }
+
+    const product =
+        row.product ||
+        row.ai_product;
+
+    return calculateCost(
+        product,
+        getPromptTokens(row),
+        getResponseTokens(row)
+    );
+}
+
+// ============================================================
+// TOTAL COST BY PRODUCT
+// ============================================================
+
+function calculateTotalUsdCost(products) {
+
+    if (!Array.isArray(products)) {
+        return 0;
+    }
+
+    return products.reduce(
+        (
+            total,
+            row
+        ) => {
+
+            return (
+                total +
+                getRowCost(row)
+            );
+
+        },
+        0
+    );
+}
+
+// ============================================================
+// GET PRODUCT COLOUR
+// ============================================================
+
+function getProductColor(product) {
+
+    if (!product) {
+        return DEFAULT_CHART_COLOR;
+    }
+
+    const key =
+        String(product)
+            .toLowerCase();
+
+    if (AI_PRODUCTS[key]) {
+        return AI_PRODUCTS[key].color;
+    }
+
+    return DEFAULT_CHART_COLOR;
+}
+
+// ============================================================
+// GET PRODUCT COLOURS
+// ============================================================
+
+function getProductColors(products) {
+
+    return products.map(
+        product =>
+            getProductColor(product)
+    );
+}
+
+// ============================================================
+// PRODUCT NAME
+// ============================================================
+
+function formatProductName(product) {
+
+    if (!product) {
+        return 'Unknown';
+    }
+
+    const key =
+        String(product)
+            .toLowerCase();
+
+    if (AI_PRODUCTS[key]) {
+        return AI_PRODUCTS[key].name;
+    }
+
+    return (
+        String(product)
+            .charAt(0)
+            .toUpperCase()
+        +
+        String(product)
+            .slice(1)
+    );
+}
+
+// ============================================================
+// LOAD BNM EXCHANGE RATE
+// ============================================================
+
+async function loadBnmExchangeRate() {
+
+    try {
+
+        const response =
+            await fetch(
+                '/api/exchange-rate'
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                'BNM exchange-rate request failed'
+            );
+        }
+
+        const data =
+            await response.json();
+
+        if (
+            data.success &&
+            Number(data.rate) > 0
+        ) {
+
+            currentBnmRate =
+                Number(data.rate);
+
+            updateExchangeRateDisplay();
+
+            return currentBnmRate;
+        }
+
+        throw new Error(
+            'Invalid BNM exchange-rate response'
+        );
+
+    } catch (error) {
+
+        console.error(
+            'BNM rate error:',
+            error
+        );
+
+        currentBnmRate = null;
+
+        updateExchangeRateDisplay();
+
+        return null;
+    }
+}
+
+// ============================================================
+// EXCHANGE RATE DISPLAY
+// ============================================================
+
+function updateExchangeRateDisplay() {
+
+    const rateElement =
+        document.getElementById(
+            'exchangeRate'
+        );
+
+    if (!rateElement) {
+        return;
+    }
+
+    if (
+        currentBnmRate !== null &&
+        Number.isFinite(
+            currentBnmRate
+        )
+    ) {
+
+        rateElement.textContent =
+            `1 USD = RM${currentBnmRate.toFixed(4)}`;
+
+        return;
+    }
+
+    rateElement.textContent =
+        'BNM rate unavailable';
+}
+
+// ============================================================
+// UPDATE COST
+// ============================================================
+
+function updateCostDisplay(
+    products
+) {
+
+    const usdCost =
+        calculateTotalUsdCost(
+            products
+        );
+
+    const myrCost =
+        currentBnmRate !== null
+            ? usdCost *
+              currentBnmRate
+            : null;
+
+    const usdElement =
+        document.getElementById(
+            'estimatedCostUsd'
+        );
+
+    const myrElement =
+        document.getElementById(
+            'estimatedCostMyr'
+        );
+
+    if (usdElement) {
+
+        usdElement.textContent =
+            formatUsd(
+                usdCost
+            );
+    }
+
+    if (myrElement) {
+
+        myrElement.textContent =
+            myrCost !== null
+                ? formatMyr(myrCost)
+                : 'N/A';
+    }
+
+    const oldCostElement =
+        document.getElementById(
+            'estimatedCost'
+        );
+
+    if (oldCostElement) {
+
+        oldCostElement.textContent =
+            myrCost !== null
+                ? formatMyr(myrCost)
+                : formatUsd(usdCost);
+    }
+
+    return {
+        usd: usdCost,
+        myr: myrCost
+    };
+}
 
 // ============================================================
 // LOAD DASHBOARD
@@ -164,25 +554,40 @@ async function loadDashboard() {
     try {
 
         const [
+
             summaryResponse,
+
             employeeResponse,
+
             providerResponse,
+
             productResponse,
+
             employeeProductResponse
+
         ] = await Promise.all([
 
-            fetch('/api/usage/summary'),
-            fetch('/api/usage/by-employee'),
-            fetch('/api/usage/by-provider'),
-            fetch('/api/usage/by-product'),
-            fetch('/api/usage/by-employee-product')
+            fetch(
+                '/api/usage/summary'
+            ),
+
+            fetch(
+                '/api/usage/by-employee'
+            ),
+
+            fetch(
+                '/api/usage/by-provider'
+            ),
+
+            fetch(
+                '/api/usage/by-product'
+            ),
+
+            fetch(
+                '/api/usage/by-employee-product'
+            )
 
         ]);
-
-
-        // ====================================================
-        // CHECK API RESPONSES
-        // ====================================================
 
         if (
             !summaryResponse.ok ||
@@ -196,11 +601,6 @@ async function loadDashboard() {
                 'One or more API requests failed'
             );
         }
-
-
-        // ====================================================
-        // PARSE JSON
-        // ====================================================
 
         const summary =
             await summaryResponse.json();
@@ -217,54 +617,37 @@ async function loadDashboard() {
         const employeeProducts =
             await employeeProductResponse.json();
 
-
-        // ====================================================
-        // DEBUG
-        // ====================================================
-
-        console.log('=================================');
-        console.log('AI OBSERVABILITY DASHBOARD');
-        console.log('=================================');
-
-        console.log('Summary:', summary);
-        console.log('Employees:', employees);
-        console.log('Providers:', providers);
-        console.log('Products:', products);
-        console.log(
-            'Employee Products:',
-            employeeProducts
+        updateMetrics(
+            summary
         );
 
-        console.log(
-            'TOTAL ESTIMATED TOKENS:',
-            getTokenValue(summary)
+        updateCostDisplay(
+            products
         );
 
+        updateEmployeeCharts(
+            employees
+        );
 
-        // ====================================================
-        // UPDATE DASHBOARD
-        // ====================================================
+        updateProviderCharts(
+            providers
+        );
 
-        updateMetrics(summary);
-
-        updateEmployeeCharts(employees);
-
-        updateProviderCharts(providers);
-
-        updateTokenChart(providers);
+        updateTokenChart(
+            providers
+        );
 
         updateEmployeeProductChart(
             employeeProducts
         );
 
-        updateTable(employees);
+        updateTable(
+            employees
+        );
 
-        updateAIStatus(products);
-
-
-        // ====================================================
-        // LAST UPDATED
-        // ====================================================
+        updateAIStatus(
+            products
+        );
 
         const lastUpdated =
             document.getElementById(
@@ -274,32 +657,26 @@ async function loadDashboard() {
         if (lastUpdated) {
 
             lastUpdated.textContent =
-                new Date().toLocaleTimeString();
-
+                new Date()
+                    .toLocaleTimeString();
         }
 
-    }
-
-    catch (error) {
+    } catch (error) {
 
         console.error(
             'Dashboard loading failed:',
             error
         );
-
     }
 }
-
 
 // ============================================================
 // KPI METRICS
 // ============================================================
 
-function updateMetrics(summary) {
-
-    // ========================================================
-    // TOTAL INTERACTIONS
-    // ========================================================
+function updateMetrics(
+    summary
+) {
 
     const interactions =
         document.getElementById(
@@ -312,13 +689,7 @@ function updateMetrics(summary) {
             formatNumber(
                 summary.interactions
             );
-
     }
-
-
-    // ========================================================
-    // TOTAL SESSIONS
-    // ========================================================
 
     const sessions =
         document.getElementById(
@@ -331,13 +702,7 @@ function updateMetrics(summary) {
             formatNumber(
                 summary.sessions
             );
-
     }
-
-
-    // ========================================================
-    // ACTIVE EMPLOYEES
-    // ========================================================
 
     const employees =
         document.getElementById(
@@ -350,13 +715,7 @@ function updateMetrics(summary) {
             formatNumber(
                 summary.active_employees
             );
-
     }
-
-
-    // ========================================================
-    // AVERAGE LATENCY
-    // ========================================================
 
     const latency =
         document.getElementById(
@@ -367,17 +726,13 @@ function updateMetrics(summary) {
 
         latency.textContent =
             summary.avg_latency_ms != null
+
                 ? `${Number(
                     summary.avg_latency_ms
                 ).toFixed(0)} ms`
+
                 : 'N/A';
-
     }
-
-
-    // ========================================================
-    // TOTAL ESTIMATED TOKENS
-    // ========================================================
 
     const tokens =
         document.getElementById(
@@ -388,44 +743,31 @@ function updateMetrics(summary) {
 
         tokens.textContent =
             formatNumber(
-                getTokenValue(summary)
+                getTokenValue(
+                    summary
+                )
             );
-
     }
 }
-
 
 // ============================================================
 // EMPLOYEE INTERACTIONS
 // ============================================================
 
-function updateEmployeeCharts(employees) {
+function updateEmployeeCharts(
+    employees
+) {
 
     if (!Array.isArray(employees)) {
-
-        console.error(
-            'Employee data is not an array:',
-            employees
-        );
-
         return;
     }
-
-
-    // ========================================================
-    // LABELS
-    // ========================================================
 
     const labels =
         employees.map(
             employee =>
-                employee.email || 'Unknown'
+                employee.email ||
+                'Unknown'
         );
-
-
-    // ========================================================
-    // INTERACTIONS
-    // ========================================================
 
     const interactions =
         employees.map(
@@ -435,29 +777,14 @@ function updateEmployeeCharts(employees) {
                 ) || 0
         );
 
-
-    // ========================================================
-    // CANVAS
-    // ========================================================
-
     const canvas =
         document.getElementById(
             'employeeInteractionChart'
         );
 
     if (!canvas) {
-
-        console.error(
-            'Canvas not found: employeeInteractionChart'
-        );
-
         return;
     }
-
-
-    // ========================================================
-    // UPDATE EXISTING CHART
-    // ========================================================
 
     if (employeeInteractionChart) {
 
@@ -467,15 +794,12 @@ function updateEmployeeCharts(employees) {
         employeeInteractionChart.data.datasets[0].data =
             interactions;
 
-        employeeInteractionChart.update('none');
+        employeeInteractionChart.update(
+            'none'
+        );
 
         return;
     }
-
-
-    // ========================================================
-    // CREATE CHART
-    // ========================================================
 
     employeeInteractionChart =
         new Chart(
@@ -484,13 +808,16 @@ function updateEmployeeCharts(employees) {
                 type: 'bar',
 
                 data: {
-                    labels: labels,
+
+                    labels,
 
                     datasets: [
                         {
-                            label: 'Interactions',
+                            label:
+                                'Interactions',
 
-                            data: interactions,
+                            data:
+                                interactions,
 
                             backgroundColor:
                                 '#6366F1',
@@ -503,32 +830,23 @@ function updateEmployeeCharts(employees) {
                     ]
                 },
 
-                options: chartOptions
+                options:
+                    chartOptions
             }
         );
 }
-
 
 // ============================================================
 // PROVIDER CHARTS
 // ============================================================
 
-function updateProviderCharts(providers) {
+function updateProviderCharts(
+    providers
+) {
 
     if (!Array.isArray(providers)) {
-
-        console.error(
-            'Provider data is not an array:',
-            providers
-        );
-
         return;
     }
-
-
-    // ========================================================
-    // LABELS
-    // ========================================================
 
     const labels =
         providers.map(
@@ -539,22 +857,12 @@ function updateProviderCharts(providers) {
                 )
         );
 
-
-    // ========================================================
-    // PRODUCTS
-    // ========================================================
-
     const products =
         providers.map(
             provider =>
                 provider.product ||
                 provider.provider
         );
-
-
-    // ========================================================
-    // INTERACTIONS
-    // ========================================================
 
     const interactions =
         providers.map(
@@ -564,11 +872,6 @@ function updateProviderCharts(providers) {
                 ) || 0
         );
 
-
-    // ========================================================
-    // SESSIONS
-    // ========================================================
-
     const sessions =
         providers.map(
             provider =>
@@ -576,11 +879,6 @@ function updateProviderCharts(providers) {
                     provider.sessions
                 ) || 0
         );
-
-
-    // ========================================================
-    // LATENCY
-    // ========================================================
 
     const latency =
         providers.map(
@@ -590,18 +888,14 @@ function updateProviderCharts(providers) {
                 ) || 0
         );
 
-
-    // ========================================================
-    // COLOURS
-    // ========================================================
-
     const colors =
-        getProductColors(products);
+        getProductColors(
+            products
+        );
 
-
-    // ========================================================
-    // INTERACTIONS BY AI
-    // ========================================================
+    // --------------------------------------------------------
+    // INTERACTIONS
+    // --------------------------------------------------------
 
     const interactionCanvas =
         document.getElementById(
@@ -624,11 +918,11 @@ function updateProviderCharts(providers) {
             providerInteractionChart.data.datasets[0].borderColor =
                 colors;
 
-            providerInteractionChart.update('none');
+            providerInteractionChart.update(
+                'none'
+            );
 
-        }
-
-        else {
+        } else {
 
             providerInteractionChart =
                 new Chart(
@@ -638,13 +932,15 @@ function updateProviderCharts(providers) {
 
                         data: {
 
-                            labels: labels,
+                            labels,
 
                             datasets: [
                                 {
-                                    label: 'Interactions',
+                                    label:
+                                        'Interactions',
 
-                                    data: interactions,
+                                    data:
+                                        interactions,
 
                                     backgroundColor:
                                         colors,
@@ -655,19 +951,18 @@ function updateProviderCharts(providers) {
                                     borderWidth: 1
                                 }
                             ]
-
                         },
 
-                        options: chartOptions
+                        options:
+                            chartOptions
                     }
                 );
         }
     }
 
-
-    // ========================================================
-    // SESSIONS BY AI
-    // ========================================================
+    // --------------------------------------------------------
+    // SESSIONS
+    // --------------------------------------------------------
 
     const sessionCanvas =
         document.getElementById(
@@ -690,11 +985,11 @@ function updateProviderCharts(providers) {
             providerSessionChart.data.datasets[0].borderColor =
                 colors;
 
-            providerSessionChart.update('none');
+            providerSessionChart.update(
+                'none'
+            );
 
-        }
-
-        else {
+        } else {
 
             providerSessionChart =
                 new Chart(
@@ -704,13 +999,15 @@ function updateProviderCharts(providers) {
 
                         data: {
 
-                            labels: labels,
+                            labels,
 
                             datasets: [
                                 {
-                                    label: 'Sessions',
+                                    label:
+                                        'Sessions',
 
-                                    data: sessions,
+                                    data:
+                                        sessions,
 
                                     backgroundColor:
                                         colors,
@@ -721,19 +1018,18 @@ function updateProviderCharts(providers) {
                                     borderWidth: 1
                                 }
                             ]
-
                         },
 
-                        options: chartOptions
+                        options:
+                            chartOptions
                     }
                 );
         }
     }
 
-
-    // ========================================================
-    // LATENCY BY AI
-    // ========================================================
+    // --------------------------------------------------------
+    // LATENCY
+    // --------------------------------------------------------
 
     const latencyCanvas =
         document.getElementById(
@@ -756,11 +1052,11 @@ function updateProviderCharts(providers) {
             latencyChart.data.datasets[0].borderColor =
                 colors;
 
-            latencyChart.update('none');
+            latencyChart.update(
+                'none'
+            );
 
-        }
-
-        else {
+        } else {
 
             latencyChart =
                 new Chart(
@@ -770,14 +1066,15 @@ function updateProviderCharts(providers) {
 
                         data: {
 
-                            labels: labels,
+                            labels,
 
                             datasets: [
                                 {
                                     label:
                                         'Average Latency (ms)',
 
-                                    data: latency,
+                                    data:
+                                        latency,
 
                                     backgroundColor:
                                         colors,
@@ -788,33 +1085,27 @@ function updateProviderCharts(providers) {
                                     borderWidth: 1
                                 }
                             ]
-
                         },
 
-                        options: chartOptions
+                        options:
+                            chartOptions
                     }
                 );
         }
     }
 }
 
-
 // ============================================================
-// TOKEN USAGE BY AI
+// TOKEN USAGE
 // ============================================================
 
-function updateTokenChart(providers) {
+function updateTokenChart(
+    providers
+) {
 
     if (!Array.isArray(providers)) {
-
-        console.error(
-            'Provider token data is not an array:',
-            providers
-        );
-
         return;
     }
-
 
     const canvas =
         document.getElementById(
@@ -822,18 +1113,8 @@ function updateTokenChart(providers) {
         );
 
     if (!canvas) {
-
-        console.error(
-            'Canvas not found: providerTokenChart'
-        );
-
         return;
     }
-
-
-    // ========================================================
-    // LABELS
-    // ========================================================
 
     const labels =
         providers.map(
@@ -844,11 +1125,6 @@ function updateTokenChart(providers) {
                 )
         );
 
-
-    // ========================================================
-    // PRODUCTS
-    // ========================================================
-
     const products =
         providers.map(
             provider =>
@@ -856,50 +1132,18 @@ function updateTokenChart(providers) {
                 provider.provider
         );
 
-
-    // ========================================================
-    // TOKENS
-    // ========================================================
-
     const tokens =
         providers.map(
             provider =>
-                getTokenValue(provider)
+                getTokenValue(
+                    provider
+                )
         );
 
-
-    // ========================================================
-    // COLOURS
-    // ========================================================
-
     const colors =
-        getProductColors(products);
-
-
-    // ========================================================
-    // DEBUG
-    // ========================================================
-
-    console.log(
-        'Token chart data:',
-        providers.map(
-            provider => ({
-                provider:
-                    provider.provider,
-
-                product:
-                    provider.product,
-
-                tokens:
-                    getTokenValue(provider)
-            })
-        )
-    );
-
-
-    // ========================================================
-    // UPDATE EXISTING CHART
-    // ========================================================
+        getProductColors(
+            products
+        );
 
     if (providerTokenChart) {
 
@@ -915,15 +1159,12 @@ function updateTokenChart(providers) {
         providerTokenChart.data.datasets[0].borderColor =
             colors;
 
-        providerTokenChart.update('none');
+        providerTokenChart.update(
+            'none'
+        );
 
         return;
     }
-
-
-    // ========================================================
-    // CREATE CHART
-    // ========================================================
 
     providerTokenChart =
         new Chart(
@@ -933,14 +1174,15 @@ function updateTokenChart(providers) {
 
                 data: {
 
-                    labels: labels,
+                    labels,
 
                     datasets: [
                         {
                             label:
                                 'Estimated Tokens',
 
-                            data: tokens,
+                            data:
+                                tokens,
 
                             backgroundColor:
                                 colors,
@@ -951,7 +1193,6 @@ function updateTokenChart(providers) {
                             borderWidth: 1
                         }
                     ]
-
                 },
 
                 options: {
@@ -967,15 +1208,11 @@ function updateTokenChart(providers) {
                             callbacks: {
 
                                 label:
-                                    function(context) {
-
-                                        return (
-                                            'Estimated Tokens: ' +
-                                            formatNumber(
-                                                context.raw
-                                            )
-                                        );
-                                    }
+                                    context =>
+                                        'Estimated Tokens: ' +
+                                        formatNumber(
+                                            context.raw
+                                        )
                             }
                         }
                     }
@@ -983,7 +1220,6 @@ function updateTokenChart(providers) {
             }
         );
 }
-
 
 // ============================================================
 // EMPLOYEE × AI PRODUCT
@@ -994,15 +1230,8 @@ function updateEmployeeProductChart(
 ) {
 
     if (!Array.isArray(employeeProducts)) {
-
-        console.error(
-            'Employee product data is not an array:',
-            employeeProducts
-        );
-
         return;
     }
-
 
     const canvas =
         document.getElementById(
@@ -1010,18 +1239,8 @@ function updateEmployeeProductChart(
         );
 
     if (!canvas) {
-
-        console.error(
-            'Canvas not found: employeeAiChart'
-        );
-
         return;
     }
-
-
-    // ========================================================
-    // EMPLOYEES
-    // ========================================================
 
     const employees = [
         ...new Set(
@@ -1032,11 +1251,6 @@ function updateEmployeeProductChart(
         )
     ];
 
-
-    // ========================================================
-    // PRODUCTS
-    // ========================================================
-
     const products = [
         ...new Set(
             employeeProducts.map(
@@ -1046,17 +1260,14 @@ function updateEmployeeProductChart(
         )
     ];
 
-
-    // ========================================================
-    // INTERACTION DATASETS
-    // ========================================================
-
     const datasets =
         products.map(
             product => {
 
                 const color =
-                    getProductColor(product);
+                    getProductColor(
+                        product
+                    );
 
                 return {
 
@@ -1097,11 +1308,6 @@ function updateEmployeeProductChart(
             }
         );
 
-
-    // ========================================================
-    // UPDATE
-    // ========================================================
-
     if (employeeAiChart) {
 
         employeeAiChart.data.labels =
@@ -1110,15 +1316,12 @@ function updateEmployeeProductChart(
         employeeAiChart.data.datasets =
             datasets;
 
-        employeeAiChart.update('none');
+        employeeAiChart.update(
+            'none'
+        );
 
         return;
     }
-
-
-    // ========================================================
-    // CREATE
-    // ========================================================
 
     employeeAiChart =
         new Chart(
@@ -1142,15 +1345,16 @@ function updateEmployeeProductChart(
                     scales: {
 
                         x: {
-
                             stacked: true
                         },
 
                         y: {
 
-                            beginAtZero: true,
+                            beginAtZero:
+                                true,
 
-                            stacked: true
+                            stacked:
+                                true
                         }
                     }
                 }
@@ -1158,12 +1362,13 @@ function updateEmployeeProductChart(
         );
 }
 
-
 // ============================================================
 // EMPLOYEE TABLE
 // ============================================================
 
-function updateTable(employees) {
+function updateTable(
+    employees
+) {
 
     const table =
         document.getElementById(
@@ -1171,17 +1376,10 @@ function updateTable(employees) {
         );
 
     if (!table) {
-
-        console.error(
-            'Employee table not found'
-        );
-
         return;
     }
 
-
     table.innerHTML = '';
-
 
     employees.forEach(
         employee => {
@@ -1190,11 +1388,6 @@ function updateTable(employees) {
                 document.createElement(
                     'tr'
                 );
-
-
-            // ==================================================
-            // AI INTERACTIONS
-            // ==================================================
 
             const gemini =
                 Number(
@@ -1226,11 +1419,6 @@ function updateTable(employees) {
                     employee.qwen
                 ) || 0;
 
-
-            // ==================================================
-            // TOTAL INTERACTIONS
-            // ==================================================
-
             const total =
                 Number(
                     employee.interactions
@@ -1244,18 +1432,10 @@ function updateTable(employees) {
                     qwen
                 );
 
-
-            // ==================================================
-            // ESTIMATED TOKENS
-            // ==================================================
-
             const totalTokens =
-                getTokenValue(employee);
-
-
-            // ==================================================
-            // TABLE ROW
-            // ==================================================
+                getTokenValue(
+                    employee
+                );
 
             row.innerHTML = `
 
@@ -1306,28 +1486,33 @@ function updateTable(employees) {
                         employee.avg_latency_ms != null
                             ? Number(
                                 employee.avg_latency_ms
-                            ).toFixed(0) + ' ms'
+                            ).toFixed(0) +
+                              ' ms'
                             : 'N/A'
                     }
                 </td>
 
                 <td>
-                    ${formatNumber(totalTokens)}
+                    ${formatNumber(
+                        totalTokens
+                    )}
                 </td>
-
             `;
 
-            table.appendChild(row);
+            table.appendChild(
+                row
+            );
         }
     );
 }
-
 
 // ============================================================
 // AI STATUS
 // ============================================================
 
-function updateAIStatus(products) {
+function updateAIStatus(
+    products
+) {
 
     const status =
         document.querySelector(
@@ -1342,7 +1527,6 @@ function updateAIStatus(products) {
         return;
     }
 
-
     const activeProducts =
         products.filter(
             product =>
@@ -1351,10 +1535,11 @@ function updateAIStatus(products) {
                 ) > 0
         );
 
-
     status.innerHTML = `
 
-        <span class="status-dot"></span>
+        <span
+            class="status-dot"
+        ></span>
 
         ${activeProducts.length}
 
@@ -1370,57 +1555,38 @@ function updateAIStatus(products) {
     `;
 }
 
-
-// ============================================================
-// PRODUCT NAME FORMATTER
-// ============================================================
-
-function formatProductName(product) {
-
-    if (!product) {
-        return 'Unknown';
-    }
-
-
-    const key =
-        String(product)
-            .toLowerCase();
-
-
-    if (AI_PRODUCTS[key]) {
-
-        return AI_PRODUCTS[key].name;
-    }
-
-
-    return (
-
-        String(product)
-            .charAt(0)
-            .toUpperCase()
-
-        +
-
-        String(product)
-            .slice(1)
-    );
-}
-
-
 // ============================================================
 // INITIAL LOAD
 // ============================================================
 
-loadDashboard();
+async function initializeDashboard() {
 
+    await loadBnmExchangeRate();
+
+    await loadDashboard();
+}
+
+initializeDashboard();
 
 // ============================================================
 // AUTO REFRESH
 // ============================================================
-
-// Refresh every 5 seconds
+//
+// Refresh dashboard every 5 seconds.
+//
+// BNM itself is cached on the server for 15 minutes,
+// so this does NOT request BNM every 5 seconds.
+//
+// ============================================================
 
 setInterval(
     loadDashboard,
     5000
+);
+
+// Refresh BNM rate every 15 minutes.
+
+setInterval(
+    loadBnmExchangeRate,
+    15 * 60 * 1000
 );
