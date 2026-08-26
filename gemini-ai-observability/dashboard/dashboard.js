@@ -63,6 +63,62 @@ const AI_PRODUCTS = {
   },
 };
 
+
+
+
+// ============================================================
+// DEMO / FAKE TOKEN DATA
+// ============================================================
+//
+// Set to true while testing the dashboard.
+// Set to false when you want to use real token data.
+//
+// This ONLY changes the data displayed in the dashboard.
+// It does NOT insert anything into SQLite.
+//
+
+const USE_FAKE_TOKEN_DATA = true;
+
+// Fake average tokens per interaction.
+// These are deliberately different for each AI product
+// so the cost calculation can be tested.
+//
+// prompt = estimated input tokens
+// response = estimated output tokens
+//
+const DEMO_TOKEN_RATES = {
+    gemini: {
+        prompt: 150,
+        response: 300,
+    },
+
+    chatgpt: {
+        prompt: 200,
+        response: 400,
+    },
+
+    claude: {
+        prompt: 250,
+        response: 500,
+    },
+
+    copilot: {
+        prompt: 180,
+        response: 350,
+    },
+
+    perplexity: {
+        prompt: 220,
+        response: 450,
+    },
+
+    qwen: {
+        prompt: 160,
+        response: 320,
+    },
+};
+
+
 // ============================================================
 // PRICING
 // ============================================================
@@ -152,13 +208,22 @@ function formatNumber(value) {
 // ============================================================
 
 function formatUsd(value) {
-  const number = Number(value);
 
-  if (!Number.isFinite(number)) {
-    return "$0.00";
-  }
+    const number = Number(value);
 
-  return "$" + number.toFixed(2);
+    if (!Number.isFinite(number)) {
+        return "$0.00";
+    }
+
+    if (number === 0) {
+        return "$0.00";
+    }
+
+    if (number < 0.01) {
+        return "$" + number.toFixed(6);
+    }
+
+    return "$" + number.toFixed(2);
 }
 
 // ============================================================
@@ -166,13 +231,22 @@ function formatUsd(value) {
 // ============================================================
 
 function formatMyr(value) {
-  const number = Number(value);
 
-  if (!Number.isFinite(number)) {
-    return "RM0.00";
-  }
+    const number = Number(value);
 
-  return "RM" + number.toFixed(2);
+    if (!Number.isFinite(number)) {
+        return "RM0.00";
+    }
+
+    if (number === 0) {
+        return "RM0.00";
+    }
+
+    if (number < 0.01) {
+        return "RM" + number.toFixed(6);
+    }
+
+    return "RM" + number.toFixed(2);
 }
 
 // ============================================================
@@ -215,6 +289,60 @@ function getResponseTokens(row) {
       row.response_tokens ?? row.completion_tokens ?? row.output_tokens ?? 0,
     ) || 0
   );
+}
+
+// ============================================================
+// APPLY FAKE TOKEN DATA
+// ============================================================
+//
+// Adds demo token values to API results when
+// USE_FAKE_TOKEN_DATA is enabled.
+//
+// This does NOT modify the database.
+//
+
+function applyFakeTokenData(rows) {
+    if (!USE_FAKE_TOKEN_DATA || !Array.isArray(rows)) {
+        return rows;
+    }
+
+    return rows.map((row) => {
+        const product = String(
+            row.product ||
+            row.ai_product ||
+            row.provider ||
+            ""
+        ).toLowerCase();
+
+        const rates = DEMO_TOKEN_RATES[product];
+
+        if (!rates) {
+            return row;
+        }
+
+        // Use interactions as the basis for the fake tokens.
+        const interactions = Number(row.interactions) || 1;
+
+        const promptTokens = rates.prompt * interactions;
+        const responseTokens = rates.response * interactions;
+        const totalTokens = promptTokens + responseTokens;
+
+        return {
+            ...row,
+
+            // Fake token values
+            prompt_tokens: promptTokens,
+            response_tokens: responseTokens,
+            total_tokens: totalTokens,
+
+            // Also provide aliases in case another part
+            // of the dashboard expects these names.
+            input_tokens: promptTokens,
+            output_tokens: responseTokens,
+            estimated_tokens: totalTokens,
+            tokens: totalTokens,
+        };
+    });
 }
 
 // ============================================================
@@ -401,73 +529,133 @@ function updateCostDisplay(products) {
 // ============================================================
 
 async function loadDashboard() {
-  try {
-    const [
-      summaryResponse,
 
-      employeeResponse,
+    try {
 
-      providerResponse,
+        const [
+            summaryResponse,
+            employeeResponse,
+            providerResponse,
+            productResponse,
+            employeeProductResponse,
+        ] = await Promise.all([
 
-      productResponse,
+            fetch("/api/usage/summary"),
+            fetch("/api/usage/by-employee"),
+            fetch("/api/usage/by-provider"),
+            fetch("/api/usage/by-product"),
+            fetch("/api/usage/by-employee-product"),
 
-      employeeProductResponse,
-    ] = await Promise.all([
-      fetch("/api/usage/summary"),
+        ]);
 
-      fetch("/api/usage/by-employee"),
+        if (
+            !summaryResponse.ok ||
+            !employeeResponse.ok ||
+            !providerResponse.ok ||
+            !productResponse.ok ||
+            !employeeProductResponse.ok
+        ) {
+            throw new Error("One or more API requests failed");
+        }
 
-      fetch("/api/usage/by-provider"),
+        let summary = await summaryResponse.json();
+        let employees = await employeeResponse.json();
+        let providers = await providerResponse.json();
+        let products = await productResponse.json();
+        let employeeProducts = await employeeProductResponse.json();
 
-      fetch("/api/usage/by-product"),
 
-      fetch("/api/usage/by-employee-product"),
-    ]);
+        // ========================================================
+        // APPLY FAKE TOKEN DATA
+        // ========================================================
 
-    if (
-      !summaryResponse.ok ||
-      !employeeResponse.ok ||
-      !providerResponse.ok ||
-      !productResponse.ok ||
-      !employeeProductResponse.ok
-    ) {
-      throw new Error("One or more API requests failed");
+        if (USE_FAKE_TOKEN_DATA) {
+
+            // ----------------------------------------------------
+            // PROVIDER / PRODUCT DATA
+            // ----------------------------------------------------
+
+            providers = applyFakeTokenData(providers);
+
+            products = applyFakeTokenData(products);
+
+
+            // ----------------------------------------------------
+            // EMPLOYEE DATA
+            // ----------------------------------------------------
+
+            employees = applyFakeTokenData(employees);
+
+
+            // ----------------------------------------------------
+            // EMPLOYEE × PRODUCT DATA
+            // ----------------------------------------------------
+
+            employeeProducts = applyFakeTokenData(employeeProducts);
+
+
+            // ----------------------------------------------------
+            // SUMMARY TOTAL TOKENS
+            // ----------------------------------------------------
+
+            const totalTokens = products.reduce(
+                (total, row) => {
+                    return total + getTokenValue(row);
+                },
+                0
+            );
+
+            summary = {
+                ...summary,
+                total_tokens: totalTokens,
+                estimated_tokens: totalTokens,
+                tokens: totalTokens,
+            };
+        }
+
+
+        // ========================================================
+        // UPDATE DASHBOARD
+        // ========================================================
+
+        updateMetrics(summary);
+
+        updateCostDisplay(products);
+
+        updateEmployeeCharts(employees);
+
+        updateProviderCharts(providers);
+
+        updateTokenChart(providers);
+
+        updateEmployeeProductChart(employeeProducts);
+
+        updateTable(employees);
+
+        updateAIStatus(products);
+
+
+        // ========================================================
+        // LAST UPDATED
+        // ========================================================
+
+        const lastUpdated = document.getElementById("lastUpdated");
+
+        if (lastUpdated) {
+
+            lastUpdated.textContent =
+                new Date().toLocaleTimeString();
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Dashboard loading failed:",
+            error
+        );
+
     }
-
-    const summary = await summaryResponse.json();
-
-    const employees = await employeeResponse.json();
-
-    const providers = await providerResponse.json();
-
-    const products = await productResponse.json();
-
-    const employeeProducts = await employeeProductResponse.json();
-
-    updateMetrics(summary);
-
-    updateCostDisplay(products);
-
-    updateEmployeeCharts(employees);
-
-    updateProviderCharts(providers);
-
-    updateTokenChart(providers);
-
-    updateEmployeeProductChart(employeeProducts);
-
-    updateTable(employees);
-
-    updateAIStatus(products);
-
-    const lastUpdated = document.getElementById("lastUpdated");
-
-    if (lastUpdated) {
-      lastUpdated.textContent = new Date().toLocaleTimeString();
-    }
-  } catch (error) {
-    console.error("Dashboard loading failed:", error);
-  }
 }
 
 // ============================================================
