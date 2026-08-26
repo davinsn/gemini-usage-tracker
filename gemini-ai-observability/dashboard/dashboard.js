@@ -71,6 +71,12 @@ const AI_PRODUCTS = {
         name: 'Perplexity',
         provider: 'Perplexity',
         color: '#20B8CD'
+
+    },
+    qwen: {
+        name: 'Qwen',
+        provider: 'Alibaba',
+        color: '#FF6A00'
     }
 };
 
@@ -1215,6 +1221,11 @@ function updateTable(employees) {
                     employee.perplexity
                 ) || 0;
 
+            const qwen =
+                Number(
+                    employee.qwen
+                ) || 0;
+
 
             // ==================================================
             // TOTAL INTERACTIONS
@@ -1229,7 +1240,8 @@ function updateTable(employees) {
                     chatgpt +
                     claude +
                     copilot +
-                    perplexity
+                    perplexity +
+                    qwen
                 );
 
 
@@ -1273,6 +1285,10 @@ function updateTable(employees) {
 
                 <td>
                     ${formatNumber(perplexity)}
+                </td>
+
+                <td>
+                    ${formatNumber(qwen)}
                 </td>
 
                 <td>
