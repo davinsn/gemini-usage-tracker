@@ -12,10 +12,6 @@
     "service_worker": "service-worker-qwen.js",
     "type": "module"
   },
-  "action": {
-    "default_popup": "popup-qwen.html",
-    "default_title": "Qwen Usage Collector — log in to enable tracking"
-  },
   "content_scripts": [
     {
       "matches": [
