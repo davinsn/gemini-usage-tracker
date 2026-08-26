@@ -5,6 +5,50 @@ console.log('[qwen-obs] ===============================');
 
 (() => {
 
+    // ============================================================
+    // INJECT QWEN NETWORK DETECTOR
+    // ============================================================
+
+    const injectQwenNetworkDetector = () => {
+        if (
+            document.documentElement.dataset
+                .qwenObsNetworkInjected === 'true'
+        ) {
+            return;
+        }
+
+        document.documentElement.dataset
+            .qwenObsNetworkInjected = 'true';
+
+        const script = document.createElement('script');
+
+        script.src = chrome.runtime.getURL(
+            'qwen-network.js'
+        );
+
+        script.onload = () => {
+            console.log(
+                '[qwen-obs] Qwen network detector injected'
+            );
+
+            script.remove();
+        };
+
+        script.onerror = (error) => {
+            console.error(
+                '[qwen-obs] Failed to inject Qwen network detector:',
+                error
+            );
+        };
+
+        (
+            document.head ||
+            document.documentElement
+        ).appendChild(script);
+    };
+
+    injectQwenNetworkDetector();
+
     console.log('[qwen-obs] IIFE STARTED');
     console.log('[qwen-obs] VERSION = API-V3 + TOKEN-ESTIMATION');
     console.log('[qwen-obs] ACCOUNT DETECTION = QWEN AUTH API ONLY');
@@ -35,10 +79,73 @@ console.log('[qwen-obs] ===============================');
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     // ============================================================
-    // MODEL
+    // MODEL DETECTION
     // ============================================================
 
-    const REQUEST_MODEL = 'qwen3.6-35b';
+    let currentQwenModel = 'unknown';
+
+    console.log(
+        '[qwen-obs] Initial model:',
+        currentQwenModel
+    );
+
+    // ============================================================
+    // RECEIVE MODEL FROM QWEN NETWORK DETECTOR
+    // ============================================================
+
+    window.addEventListener('message', (event) => {
+
+        if (event.source !== window) {
+            return;
+        }
+
+        const data = event.data;
+
+        if (!data) {
+            return;
+        }
+
+        if (
+            data.source !== 'qwen-observability' ||
+            data.type !== 'QWEN_MODEL_DETECTED'
+        ) {
+            return;
+        }
+
+        if (
+            typeof data.model !== 'string' ||
+            !data.model.trim()
+        ) {
+            return;
+        }
+
+        const detectedModel = data.model.trim();
+
+        if (
+            currentQwenModel === detectedModel
+        ) {
+            return;
+        }
+
+        currentQwenModel = detectedModel;
+
+        console.log(
+            '[qwen-obs] ================================='
+        );
+
+        console.log(
+            '[qwen-obs] QWEN MODEL AUTO-DETECTED'
+        );
+
+        console.log(
+            '[qwen-obs] Model:',
+            currentQwenModel
+        );
+
+        console.log(
+            '[qwen-obs] ================================='
+        );
+    });
 
     // ============================================================
     // EXTRACT EMAIL
@@ -303,7 +410,7 @@ console.log('[qwen-obs] ===============================');
 
         console.log(
             '[qwen-obs] Model:',
-            REQUEST_MODEL
+            currentQwenModel
         );
 
         console.log(
@@ -616,7 +723,7 @@ console.log('[qwen-obs] ===============================');
             );
 
             const model =
-                REQUEST_MODEL || 'unknown';
+                currentQwenModel || 'unknown';
 
             console.log(
                 '[qwen-obs] Model:',
@@ -1062,7 +1169,7 @@ console.log('[qwen-obs] ===============================');
 
         console.log(
             '[qwen-obs] Model:',
-            REQUEST_MODEL
+            currentQwenModel
         );
 
         console.log(
