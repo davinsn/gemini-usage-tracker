@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {"dev": "node --watch src/server.js", "start": "node src/server.js"},
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "better-sqlite3": "^11.3.0",
     "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3"
   }
 }
