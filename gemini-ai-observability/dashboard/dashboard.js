@@ -399,31 +399,25 @@ function formatProductName(product) {
 // ============================================================
 
 async function loadBnmExchangeRate() {
-
     try {
-
-        const response =
-            await fetch(
-                '/api/exchange-rate'
-            );
+        const response = await fetch(
+            '/api/exchange-rate/usd-myr'
+        );
 
         if (!response.ok) {
-
             throw new Error(
                 'BNM exchange-rate request failed'
             );
         }
 
-        const data =
-            await response.json();
+        const data = await response.json();
 
         if (
             data.success &&
-            Number(data.rate) > 0
+            Number(data.middle_rate) > 0
         ) {
-
             currentBnmRate =
-                Number(data.rate);
+                Number(data.middle_rate);
 
             updateExchangeRateDisplay();
 
@@ -435,14 +429,12 @@ async function loadBnmExchangeRate() {
         );
 
     } catch (error) {
-
         console.error(
             'BNM rate error:',
             error
         );
 
         currentBnmRate = null;
-
         updateExchangeRateDisplay();
 
         return null;

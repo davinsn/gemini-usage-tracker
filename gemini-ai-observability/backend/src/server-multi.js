@@ -16,11 +16,6 @@ const app = express();
 const port =
     Number(process.env.PORT || 4000);
 
-const JWT_SECRET =
-    process.env.JWT_SECRET ||
-    'development-only-secret-key-change-me';
-
-const JWT_EXPIRES_IN = '7d';
 
 // ============================================================
 // DEFAULT PROVIDER CONFIGURATION
@@ -1785,11 +1780,13 @@ app.get(
 
             const data = await response.json();
 
-            // Find USD from BNM response
-            const usd = data.data?.find(
-                currency =>
-                    currency.currency_code === 'USD'
+            console.log(
+                '[ai-obs] BNM response:',
+                JSON.stringify(data, null, 2)
             );
+
+            // USD endpoint already returns USD data
+            const usd = data.data;
 
             if (!usd || !usd.rate) {
                 return res.status(502).json({
@@ -1804,18 +1801,31 @@ app.get(
                 currency: 'USD',
                 target_currency: 'MYR',
                 unit: usd.unit,
+
                 buying_rate:
                     usd.rate.buying_rate,
+
                 selling_rate:
                     usd.rate.selling_rate,
+
                 middle_rate:
-                    usd.rate.middle_rate,
+                    usd.rate.middle_rate ??
+                    (
+                        (
+                            Number(usd.rate.buying_rate) +
+                            Number(usd.rate.selling_rate)
+                        ) / 2
+                    ),
+
                 date:
                     usd.rate.date,
+
                 session:
                     data.meta?.session ?? null,
+
                 last_updated:
                     data.meta?.last_updated ?? null,
+
                 source:
                     'Bank Negara Malaysia'
             });
