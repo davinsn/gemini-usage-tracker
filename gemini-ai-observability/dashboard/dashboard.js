@@ -31,7 +31,7 @@ let currentBnmRate = null;
 
 let demoMode = false;
 
-let demoCostMultiplier = 100;
+let demoCostMultiplier = 1000;
 
 // ============================================================
 // AI PRODUCT CONFIGURATION
@@ -757,37 +757,25 @@ function updateExchangeRateDisplay() {
 // DEMO MODE DISPLAY
 // ============================================================
 
-function updateDemoModeDisplay() {
+// function updateDemoModeDisplay() {
 
-    const indicator =
-        document.getElementById(
-            'demoModeIndicator'
-        );
+//     const indicator =
+//         document.getElementById('demoModeIndicator');
 
-    if (!indicator) {
-        return;
-    }
+//     if (!indicator) {
+//         return;
+//     }
 
-    if (demoMode) {
+//     if (DEMO_MODE) {
+//         indicator.style.display = 'inline-flex';
 
-        indicator.style.display =
-            'inline-flex';
-
-        indicator.textContent =
-            `DEMO MODE — COST ×${formatNumber(
-                demoCostMultiplier
-            )}`;
-
-    } else {
-
-        indicator.style.display =
-            'none';
-
-        indicator.textContent = '';
-
-    }
-
-}
+//         indicator.textContent =
+//             `DEMO MODE • ${DEMO_COST_MULTIPLIER}×`;
+//     } else {
+//         indicator.style.display = 'none';
+//         indicator.textContent = '';
+//     }
+// }
 
 // ============================================================
 // UPDATE COST
@@ -842,31 +830,8 @@ function updateCostDisplay(products) {
                 : formatUsd(displayedUsdCost);
     }
 
-    // --------------------------------------------------------
-    // DEMO MODE INDICATOR
-    // --------------------------------------------------------
-
-    const demoIndicator =
-        document.getElementById(
-            'demoModeIndicator'
-        );
-
-    if (demoIndicator) {
-
-        if (DEMO_MODE) {
-
-            demoIndicator.style.display =
-                'inline-flex';
-
-            demoIndicator.textContent =
-                `DEMO MODE • ${DEMO_COST_MULTIPLIER}×`;
-
-        } else {
-
-            demoIndicator.style.display =
-                'none';
-        }
-    }
+    // DO NOT update demoModeIndicator here.
+    // updateDemoModeDisplay() handles it separately.
 
     return {
         actualUsd: actualUsdCost,
@@ -1195,7 +1160,7 @@ function initializeDemoMode() {
 
                         : 1;
 
-                updateDemoModeDisplay();
+                // updateDemoModeDisplay();
 
                 loadDashboard();
 
@@ -1211,14 +1176,14 @@ function initializeDemoMode() {
             demoMode =
                 toggle.checked;
 
-            updateDemoModeDisplay();
+            // updateDemoModeDisplay();
 
             loadDashboard();
 
         }
     );
 
-    updateDemoModeDisplay();
+    // updateDemoModeDisplay();
 
 }
 
