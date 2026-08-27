@@ -456,7 +456,7 @@ console.log(
 
             const payload = {
 
-                type: 'QWEN_USAGE_EVENT',
+                type: 'AI_USAGE_EVENT',
 
                 provider: 'alibaba',
 
