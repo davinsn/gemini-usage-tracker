@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "AI Observability",
+  "version": "1.0.0",
+  "description": "Tracks employee usage of Qwen, ChatGPT, Gemini, and Perplexity chat interfaces for internal reporting.",
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "permissions": [
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://chat.qwen.ai/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://www.perplexity.ai/*",
+    "http://localhost:4000/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": ["https://chat.qwen.ai/*"],
+      "js": ["config.js", "qwen-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["config.js", "chatgpt-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["config.js", "gemini-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.perplexity.ai/*"],
+      "js": ["config.js", "perplexity-content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "qwen-network.js",
+        "chatgpt-network.js",
+        "gemini-network.js",
+        "perplexity-network.js"
+      ],
+      "matches": [
+        "https://chat.qwen.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://www.perplexity.ai/*"
+      ]
+    }
+  ]
+}

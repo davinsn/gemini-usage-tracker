@@ -58,7 +58,7 @@ console.log('[qwen-obs] ===============================');
     // CONFIG
     // ============================================================
 
-    const cfg = window.QWEN_OBS_CONFIG;
+  const cfg = window.AI_OBS_CONFIG;
 
     console.log('[qwen-obs] CONFIG:', cfg);
 
