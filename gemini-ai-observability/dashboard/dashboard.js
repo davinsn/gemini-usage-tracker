@@ -22,6 +22,18 @@ let tokenTypeChart;
 let currentBnmRate = null;
 
 // ============================================================
+// DEMO MODE
+// ============================================================
+
+// Demo mode ONLY changes displayed cost.
+// It does NOT change token counts, interactions,
+// sessions, latency, or database values.
+
+let demoMode = false;
+
+let demoCostMultiplier = 100;
+
+// ============================================================
 // AI PRODUCT CONFIGURATION
 // ============================================================
 
@@ -62,14 +74,12 @@ const AI_PRODUCTS = {
         provider: 'Alibaba',
         color: '#FF6A00'
     }
+
 };
 
 // ============================================================
 // PRICING
-// ============================================================
-//
 // USD PER TOKEN
-//
 // ============================================================
 
 const AI_PRICING = {
@@ -100,17 +110,47 @@ const AI_PRICING = {
     },
 
     qwen: {
-    input: 0.000000375,
-    output: 0.00000225
+        input: 0.000000375,
+        output: 0.00000225
     }
+
 };
+
+// ============================================================
+// DEMO MODE
+// ============================================================
+
+// Set to true to enable inflated/demo cost values.
+const DEMO_MODE = true;
+
+// Multiplier applied ONLY to displayed cost.
+// Example:
+// 1    = normal cost
+// 10   = 10x cost
+// 100  = 100x cost
+// 1000 = 1000x cost
+const DEMO_COST_MULTIPLIER = 100;
+
+
+// ============================================================
+// COST DISPLAY CALCULATION
+// ============================================================
+
+function applyDemoCostMultiplier(cost) {
+    const numericCost = Number(cost) || 0;
+
+    if (!DEMO_MODE) {
+        return numericCost;
+    }
+
+    return numericCost * DEMO_COST_MULTIPLIER;
+}
 
 // ============================================================
 // DEFAULT CHART COLOUR
 // ============================================================
 
-const DEFAULT_CHART_COLOR =
-    '#64748B';
+const DEFAULT_CHART_COLOR = '#64748B';
 
 // ============================================================
 // CHART OPTIONS
@@ -148,14 +188,14 @@ const chartOptions = {
 
 function formatNumber(value) {
 
-    const number =
-        Number(value);
+    const number = Number(value);
 
     if (!Number.isFinite(number)) {
         return '0';
     }
 
     return number.toLocaleString();
+
 }
 
 // ============================================================
@@ -164,17 +204,14 @@ function formatNumber(value) {
 
 function formatUsd(value) {
 
-    const number =
-        Number(value);
+    const number = Number(value);
 
     if (!Number.isFinite(number)) {
         return '$0.00';
     }
 
-    return (
-        '$' +
-        number.toFixed(2)
-    );
+    return '$' + number.toFixed(2);
+
 }
 
 // ============================================================
@@ -183,17 +220,14 @@ function formatUsd(value) {
 
 function formatMyr(value) {
 
-    const number =
-        Number(value);
+    const number = Number(value);
 
     if (!Number.isFinite(number)) {
         return 'RM0.00';
     }
 
-    return (
-        'RM' +
-        number.toFixed(2)
-    );
+    return 'RM' + number.toFixed(2);
+
 }
 
 // ============================================================
@@ -207,11 +241,14 @@ function getTokenValue(row) {
     }
 
     return Number(
+
         row.total_tokens ??
         row.estimated_tokens ??
         row.tokens ??
         0
+
     ) || 0;
+
 }
 
 // ============================================================
@@ -225,10 +262,13 @@ function getPromptTokens(row) {
     }
 
     return Number(
+
         row.prompt_tokens ??
         row.input_tokens ??
         0
+
     ) || 0;
+
 }
 
 // ============================================================
@@ -242,11 +282,14 @@ function getResponseTokens(row) {
     }
 
     return Number(
+
         row.response_tokens ??
         row.completion_tokens ??
         row.output_tokens ??
         0
+
     ) || 0;
+
 }
 
 // ============================================================
@@ -260,9 +303,69 @@ function calculateCost(
 ) {
 
     const key =
-        String(
-            product || ''
-        ).toLowerCase();
+        String(product || '').toLowerCase();
+
+    const pricing =
+        AI_PRICING[key];
+
+    if (!pricing) {
+        return 0;
+    }
+
+    const inputTokens =
+        Number(promptTokens) || 0;
+
+    const outputTokens =
+        Number(responseTokens) || 0;
+
+    // --------------------------------------------------------
+    // REAL COST
+    // --------------------------------------------------------
+
+    const baseCost =
+
+        (
+            inputTokens *
+            pricing.input
+        )
+
+        +
+
+        (
+            outputTokens *
+            pricing.output
+        );
+
+    // --------------------------------------------------------
+    // DEMO MODE
+    // --------------------------------------------------------
+    // Only the displayed cost is multiplied.
+    // Actual token values remain untouched.
+    // --------------------------------------------------------
+
+    if (demoMode) {
+        return baseCost * demoCostMultiplier;
+    }
+
+    return baseCost;
+
+}
+
+// ============================================================
+// REAL / BASE PRODUCT COST
+// ============================================================
+// This function intentionally ignores Demo Mode.
+// Useful for showing the original cost if needed.
+// ============================================================
+
+function calculateBaseCost(
+    product,
+    promptTokens,
+    responseTokens
+) {
+
+    const key =
+        String(product || '').toLowerCase();
 
     const pricing =
         AI_PRICING[key];
@@ -278,12 +381,17 @@ function calculateCost(
         Number(responseTokens) || 0;
 
     return (
+
         inputTokens *
         pricing.input
+
     ) + (
+
         outputTokens *
         pricing.output
+
     );
+
 }
 
 // ============================================================
@@ -301,14 +409,45 @@ function getRowCost(row) {
         row.ai_product;
 
     return calculateCost(
+
         product,
+
         getPromptTokens(row),
+
         getResponseTokens(row)
+
     );
+
 }
 
 // ============================================================
-// TOTAL COST BY PRODUCT
+// BASE COST FOR ROW
+// ============================================================
+
+function getBaseRowCost(row) {
+
+    if (!row) {
+        return 0;
+    }
+
+    const product =
+        row.product ||
+        row.ai_product;
+
+    return calculateBaseCost(
+
+        product,
+
+        getPromptTokens(row),
+
+        getResponseTokens(row)
+
+    );
+
+}
+
+// ============================================================
+// TOTAL COST
 // ============================================================
 
 function calculateTotalUsdCost(products) {
@@ -318,19 +457,134 @@ function calculateTotalUsdCost(products) {
     }
 
     return products.reduce(
+
         (
             total,
             row
         ) => {
 
             return (
+
                 total +
                 getRowCost(row)
+
             );
 
         },
+
         0
+
     );
+
+}
+
+// ============================================================
+// COST BREAKDOWN BY AI
+// ============================================================
+
+function calculateCostBreakdown(products) {
+
+    const breakdown = {};
+
+    // Initialise all configured AI products.
+    Object.keys(AI_PRODUCTS).forEach(
+        product => {
+
+            breakdown[product] = {
+
+                product: product,
+
+                name:
+                    AI_PRODUCTS[product].name,
+
+                color:
+                    AI_PRODUCTS[product].color,
+
+                usd: 0,
+
+                baseUsd: 0,
+
+                myr: 0,
+
+                interactions: 0,
+
+                promptTokens: 0,
+
+                responseTokens: 0,
+
+                totalTokens: 0
+
+            };
+
+        }
+    );
+
+    if (!Array.isArray(products)) {
+        return breakdown;
+    }
+
+    products.forEach(row => {
+
+        const product = String(
+
+            row.product ||
+            row.ai_product ||
+            ''
+
+        ).toLowerCase();
+
+        if (!breakdown[product]) {
+            return;
+        }
+
+        const promptTokens =
+            getPromptTokens(row);
+
+        const responseTokens =
+            getResponseTokens(row);
+
+        const totalTokens =
+            getTokenValue(row);
+
+        const cost =
+            getRowCost(row);
+
+        const baseCost =
+            getBaseRowCost(row);
+
+        breakdown[product].usd += cost;
+
+        breakdown[product].baseUsd += baseCost;
+
+        breakdown[product].promptTokens +=
+            promptTokens;
+
+        breakdown[product].responseTokens +=
+            responseTokens;
+
+        breakdown[product].totalTokens +=
+            totalTokens;
+
+        breakdown[product].interactions +=
+            Number(row.interactions) || 0;
+
+    });
+
+    // Calculate MYR values.
+    Object.values(breakdown).forEach(item => {
+
+        if (currentBnmRate !== null) {
+
+            item.myr =
+                item.usd *
+                currentBnmRate;
+
+        }
+
+    });
+
+    return breakdown;
+
 }
 
 // ============================================================
@@ -344,14 +598,14 @@ function getProductColor(product) {
     }
 
     const key =
-        String(product)
-            .toLowerCase();
+        String(product).toLowerCase();
 
     if (AI_PRODUCTS[key]) {
         return AI_PRODUCTS[key].color;
     }
 
     return DEFAULT_CHART_COLOR;
+
 }
 
 // ============================================================
@@ -361,9 +615,12 @@ function getProductColor(product) {
 function getProductColors(products) {
 
     return products.map(
+
         product =>
             getProductColor(product)
+
     );
+
 }
 
 // ============================================================
@@ -377,21 +634,25 @@ function formatProductName(product) {
     }
 
     const key =
-        String(product)
-            .toLowerCase();
+        String(product).toLowerCase();
 
     if (AI_PRODUCTS[key]) {
         return AI_PRODUCTS[key].name;
     }
 
     return (
+
         String(product)
             .charAt(0)
             .toUpperCase()
+
         +
+
         String(product)
             .slice(1)
+
     );
+
 }
 
 // ============================================================
@@ -399,29 +660,39 @@ function formatProductName(product) {
 // ============================================================
 
 async function loadBnmExchangeRate() {
+
     try {
+
         const response = await fetch(
             '/api/exchange-rate/usd-myr'
         );
 
         if (!response.ok) {
+
             throw new Error(
                 'BNM exchange-rate request failed'
             );
+
         }
 
-        const data = await response.json();
+        const data =
+            await response.json();
 
         if (
+
             data.success &&
+
             Number(data.middle_rate) > 0
+
         ) {
+
             currentBnmRate =
                 Number(data.middle_rate);
 
             updateExchangeRateDisplay();
 
             return currentBnmRate;
+
         }
 
         throw new Error(
@@ -429,16 +700,20 @@ async function loadBnmExchangeRate() {
         );
 
     } catch (error) {
+
         console.error(
             'BNM rate error:',
             error
         );
 
         currentBnmRate = null;
+
         updateExchangeRateDisplay();
 
         return null;
+
     }
+
 }
 
 // ============================================================
@@ -457,39 +732,80 @@ function updateExchangeRateDisplay() {
     }
 
     if (
+
         currentBnmRate !== null &&
+
         Number.isFinite(
             currentBnmRate
         )
+
     ) {
 
         rateElement.textContent =
             `1 USD = RM${currentBnmRate.toFixed(4)}`;
 
         return;
+
     }
 
     rateElement.textContent =
         'BNM rate unavailable';
+
+}
+
+// ============================================================
+// DEMO MODE DISPLAY
+// ============================================================
+
+function updateDemoModeDisplay() {
+
+    const indicator =
+        document.getElementById(
+            'demoModeIndicator'
+        );
+
+    if (!indicator) {
+        return;
+    }
+
+    if (demoMode) {
+
+        indicator.style.display =
+            'inline-flex';
+
+        indicator.textContent =
+            `DEMO MODE — COST ×${formatNumber(
+                demoCostMultiplier
+            )}`;
+
+    } else {
+
+        indicator.style.display =
+            'none';
+
+        indicator.textContent = '';
+
+    }
+
 }
 
 // ============================================================
 // UPDATE COST
 // ============================================================
 
-function updateCostDisplay(
-    products
-) {
+function updateCostDisplay(products) {
 
-    const usdCost =
-        calculateTotalUsdCost(
-            products
-        );
+    // Calculate the actual token-based cost first.
+    const actualUsdCost =
+        calculateTotalUsdCost(products);
+
+    // Apply demo multiplier only to what is displayed.
+    const displayedUsdCost =
+        applyDemoCostMultiplier(actualUsdCost);
 
     const myrCost =
         currentBnmRate !== null
-            ? usdCost *
-              currentBnmRate
+            ? displayedUsdCost * currentBnmRate
             : null;
 
     const usdElement =
@@ -503,15 +819,11 @@ function updateCostDisplay(
         );
 
     if (usdElement) {
-
         usdElement.textContent =
-            formatUsd(
-                usdCost
-            );
+            formatUsd(displayedUsdCost);
     }
 
     if (myrElement) {
-
         myrElement.textContent =
             myrCost !== null
                 ? formatMyr(myrCost)
@@ -524,17 +836,390 @@ function updateCostDisplay(
         );
 
     if (oldCostElement) {
-
         oldCostElement.textContent =
             myrCost !== null
                 ? formatMyr(myrCost)
-                : formatUsd(usdCost);
+                : formatUsd(displayedUsdCost);
+    }
+
+    // --------------------------------------------------------
+    // DEMO MODE INDICATOR
+    // --------------------------------------------------------
+
+    const demoIndicator =
+        document.getElementById(
+            'demoModeIndicator'
+        );
+
+    if (demoIndicator) {
+
+        if (DEMO_MODE) {
+
+            demoIndicator.style.display =
+                'inline-flex';
+
+            demoIndicator.textContent =
+                `DEMO MODE • ${DEMO_COST_MULTIPLIER}×`;
+
+        } else {
+
+            demoIndicator.style.display =
+                'none';
+        }
     }
 
     return {
-        usd: usdCost,
-        myr: myrCost
+        actualUsd: actualUsdCost,
+        displayedUsd: displayedUsdCost,
+        myr: myrCost,
+        demoMode: DEMO_MODE,
+        multiplier: DEMO_COST_MULTIPLIER
     };
+}
+
+// ============================================================
+// COST BREAKDOWN TABLE
+// ============================================================
+
+function updateCostBreakdown(products) {
+
+    const container =
+        document.getElementById(
+            'costBreakdown'
+        );
+
+    if (!container) {
+        return;
+    }
+
+    const breakdown =
+        calculateCostBreakdown(
+            products
+        );
+
+    const items =
+        Object.values(breakdown);
+
+    const totalUsd =
+        items.reduce(
+            (sum, item) =>
+                sum + item.usd,
+            0
+        );
+
+    let html = '';
+
+    html += `
+
+        <div class="cost-breakdown-header">
+
+            <div>
+
+                <h3>
+                    AI Cost Breakdown
+                </h3>
+
+                <p>
+                    Estimated cost by AI product
+                </p>
+
+            </div>
+
+            ${
+                demoMode
+
+                    ? `
+
+                    <span
+                        id="costDemoBadge"
+                        class="demo-cost-badge"
+                    >
+                        DEMO ×${formatNumber(
+                            demoCostMultiplier
+                        )}
+                    </span>
+
+                    `
+
+                    : ''
+
+            }
+
+        </div>
+
+        <div class="cost-breakdown-table-wrapper">
+
+            <table class="cost-breakdown-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>AI</th>
+
+                        <th>Interactions</th>
+
+                        <th>Tokens</th>
+
+                        <th>USD</th>
+
+                        <th>MYR</th>
+
+                        <th>% of Total</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+    `;
+
+    items.forEach(item => {
+
+        if (
+
+            item.usd === 0 &&
+
+            item.interactions === 0 &&
+
+            item.totalTokens === 0
+
+        ) {
+
+            return;
+
+        }
+
+        const percentage =
+
+            totalUsd > 0
+
+                ? (
+
+                    item.usd /
+                    totalUsd
+                ) * 100
+
+                : 0;
+
+        html += `
+
+            <tr>
+
+                <td>
+
+                    <div
+                        class="cost-product-name"
+                    >
+
+                        <span
+                            class="cost-product-dot"
+                            style="
+                                background-color:
+                                ${item.color};
+                            "
+                        ></span>
+
+                        <strong>
+                            ${item.name}
+                        </strong>
+
+                    </div>
+
+                </td>
+
+                <td>
+                    ${formatNumber(
+                        item.interactions
+                    )}
+                </td>
+
+                <td>
+                    ${formatNumber(
+                        item.totalTokens
+                    )}
+                </td>
+
+                <td>
+                    ${formatUsd(
+                        item.usd
+                    )}
+                </td>
+
+                <td>
+                    ${
+                        currentBnmRate !== null
+
+                            ? formatMyr(item.myr)
+
+                            : 'N/A'
+                    }
+                </td>
+
+                <td>
+                    ${percentage.toFixed(1)}%
+                </td>
+
+            </tr>
+
+        `;
+
+    });
+
+    html += `
+
+                </tbody>
+
+                <tfoot>
+
+                    <tr>
+
+                        <td>
+                            <strong>Total</strong>
+                        </td>
+
+                        <td>
+                            -
+                        </td>
+
+                        <td>
+                            -
+                        </td>
+
+                        <td>
+                            <strong>
+                                ${formatUsd(totalUsd)}
+                            </strong>
+                        </td>
+
+                        <td>
+
+                            <strong>
+
+                                ${
+                                    currentBnmRate !== null
+
+                                        ? formatMyr(
+                                            totalUsd *
+                                            currentBnmRate
+                                        )
+
+                                        : 'N/A'
+                                }
+
+                            </strong>
+
+                        </td>
+
+                        <td>
+                            <strong>100%</strong>
+                        </td>
+
+                    </tr>
+
+                </tfoot>
+
+            </table>
+
+        </div>
+
+    `;
+
+    if (demoMode) {
+
+        html += `
+
+            <div class="demo-cost-note">
+
+                Demo Mode is enabled.
+                Costs shown above are multiplied by
+                ×${formatNumber(demoCostMultiplier)}
+                for demonstration purposes.
+                Actual token usage is unchanged.
+
+            </div>
+
+        `;
+
+    }
+
+    container.innerHTML = html;
+
+}
+
+// ============================================================
+// DEMO MODE CONTROLS
+// ============================================================
+
+function initializeDemoMode() {
+
+    const toggle =
+        document.getElementById(
+            'demoModeToggle'
+        );
+
+    const multiplier =
+        document.getElementById(
+            'demoCostMultiplier'
+        );
+
+    if (!toggle) {
+        return;
+    }
+
+    toggle.checked =
+        demoMode;
+
+    if (multiplier) {
+
+        multiplier.value =
+            String(
+                demoCostMultiplier
+            );
+
+        multiplier.addEventListener(
+            'change',
+            () => {
+
+                const value =
+                    Number(
+                        multiplier.value
+                    );
+
+                demoCostMultiplier =
+                    Number.isFinite(value) &&
+                    value > 0
+
+                        ? value
+
+                        : 1;
+
+                updateDemoModeDisplay();
+
+                loadDashboard();
+
+            }
+        );
+
+    }
+
+    toggle.addEventListener(
+        'change',
+        () => {
+
+            demoMode =
+                toggle.checked;
+
+            updateDemoModeDisplay();
+
+            loadDashboard();
+
+        }
+    );
+
+    updateDemoModeDisplay();
+
 }
 
 // ============================================================
@@ -548,13 +1233,9 @@ async function loadDashboard() {
         const [
 
             summaryResponse,
-
             employeeResponse,
-
             providerResponse,
-
             productResponse,
-
             employeeProductResponse
 
         ] = await Promise.all([
@@ -582,16 +1263,23 @@ async function loadDashboard() {
         ]);
 
         if (
+
             !summaryResponse.ok ||
+
             !employeeResponse.ok ||
+
             !providerResponse.ok ||
+
             !productResponse.ok ||
+
             !employeeProductResponse.ok
+
         ) {
 
             throw new Error(
                 'One or more API requests failed'
             );
+
         }
 
         const summary =
@@ -609,11 +1297,19 @@ async function loadDashboard() {
         const employeeProducts =
             await employeeProductResponse.json();
 
+        // ----------------------------------------------------
+        // UPDATE DASHBOARD
+        // ----------------------------------------------------
+
         updateMetrics(
             summary
         );
 
         updateCostDisplay(
+            products
+        );
+
+        updateCostBreakdown(
             products
         );
 
@@ -651,6 +1347,7 @@ async function loadDashboard() {
             lastUpdated.textContent =
                 new Date()
                     .toLocaleTimeString();
+
         }
 
     } catch (error) {
@@ -659,16 +1356,16 @@ async function loadDashboard() {
             'Dashboard loading failed:',
             error
         );
+
     }
+
 }
 
 // ============================================================
 // KPI METRICS
 // ============================================================
 
-function updateMetrics(
-    summary
-) {
+function updateMetrics(summary) {
 
     const interactions =
         document.getElementById(
@@ -681,6 +1378,7 @@ function updateMetrics(
             formatNumber(
                 summary.interactions
             );
+
     }
 
     const sessions =
@@ -694,6 +1392,7 @@ function updateMetrics(
             formatNumber(
                 summary.sessions
             );
+
     }
 
     const employees =
@@ -707,6 +1406,7 @@ function updateMetrics(
             formatNumber(
                 summary.active_employees
             );
+
     }
 
     const latency =
@@ -717,6 +1417,7 @@ function updateMetrics(
     if (latency) {
 
         latency.textContent =
+
             summary.avg_latency_ms != null
 
                 ? `${Number(
@@ -724,6 +1425,7 @@ function updateMetrics(
                 ).toFixed(0)} ms`
 
                 : 'N/A';
+
     }
 
     const tokens =
@@ -739,16 +1441,16 @@ function updateMetrics(
                     summary
                 )
             );
+
     }
+
 }
 
 // ============================================================
 // EMPLOYEE INTERACTIONS
 // ============================================================
 
-function updateEmployeeCharts(
-    employees
-) {
+function updateEmployeeCharts(employees) {
 
     if (!Array.isArray(employees)) {
         return;
@@ -791,12 +1493,14 @@ function updateEmployeeCharts(
         );
 
         return;
+
     }
 
     employeeInteractionChart =
         new Chart(
             canvas,
             {
+
                 type: 'bar',
 
                 data: {
@@ -804,7 +1508,9 @@ function updateEmployeeCharts(
                     labels,
 
                     datasets: [
+
                         {
+
                             label:
                                 'Interactions',
 
@@ -818,23 +1524,26 @@ function updateEmployeeCharts(
                                 '#6366F1',
 
                             borderWidth: 1
+
                         }
+
                     ]
+
                 },
 
                 options:
                     chartOptions
+
             }
         );
+
 }
 
 // ============================================================
 // PROVIDER CHARTS
 // ============================================================
 
-function updateProviderCharts(
-    providers
-) {
+function updateProviderCharts(providers) {
 
     if (!Array.isArray(providers)) {
         return;
@@ -920,6 +1629,7 @@ function updateProviderCharts(
                 new Chart(
                     interactionCanvas,
                     {
+
                         type: 'bar',
 
                         data: {
@@ -927,7 +1637,9 @@ function updateProviderCharts(
                             labels,
 
                             datasets: [
+
                                 {
+
                                     label:
                                         'Interactions',
 
@@ -941,15 +1653,21 @@ function updateProviderCharts(
                                         colors,
 
                                     borderWidth: 1
+
                                 }
+
                             ]
+
                         },
 
                         options:
                             chartOptions
+
                     }
                 );
+
         }
+
     }
 
     // --------------------------------------------------------
@@ -987,6 +1705,7 @@ function updateProviderCharts(
                 new Chart(
                     sessionCanvas,
                     {
+
                         type: 'bar',
 
                         data: {
@@ -994,7 +1713,9 @@ function updateProviderCharts(
                             labels,
 
                             datasets: [
+
                                 {
+
                                     label:
                                         'Sessions',
 
@@ -1008,15 +1729,21 @@ function updateProviderCharts(
                                         colors,
 
                                     borderWidth: 1
+
                                 }
+
                             ]
+
                         },
 
                         options:
                             chartOptions
+
                     }
                 );
+
         }
+
     }
 
     // --------------------------------------------------------
@@ -1054,6 +1781,7 @@ function updateProviderCharts(
                 new Chart(
                     latencyCanvas,
                     {
+
                         type: 'bar',
 
                         data: {
@@ -1061,7 +1789,9 @@ function updateProviderCharts(
                             labels,
 
                             datasets: [
+
                                 {
+
                                     label:
                                         'Average Latency (ms)',
 
@@ -1075,25 +1805,30 @@ function updateProviderCharts(
                                         colors,
 
                                     borderWidth: 1
+
                                 }
+
                             ]
+
                         },
 
                         options:
                             chartOptions
+
                     }
                 );
+
         }
+
     }
+
 }
 
 // ============================================================
 // TOKEN USAGE
 // ============================================================
 
-function updateTokenChart(
-    providers
-) {
+function updateTokenChart(providers) {
 
     if (!Array.isArray(providers)) {
         return;
@@ -1156,12 +1891,14 @@ function updateTokenChart(
         );
 
         return;
+
     }
 
     providerTokenChart =
         new Chart(
             canvas,
             {
+
                 type: 'bar',
 
                 data: {
@@ -1169,7 +1906,9 @@ function updateTokenChart(
                     labels,
 
                     datasets: [
+
                         {
+
                             label:
                                 'Estimated Tokens',
 
@@ -1183,8 +1922,11 @@ function updateTokenChart(
                                 colors,
 
                             borderWidth: 1
+
                         }
+
                     ]
+
                 },
 
                 options: {
@@ -1201,16 +1943,24 @@ function updateTokenChart(
 
                                 label:
                                     context =>
+
                                         'Estimated Tokens: ' +
+
                                         formatNumber(
                                             context.raw
                                         )
+
                             }
+
                         }
+
                     }
+
                 }
+
             }
         );
+
 }
 
 // ============================================================
@@ -1235,21 +1985,29 @@ function updateEmployeeProductChart(
     }
 
     const employees = [
+
         ...new Set(
+
             employeeProducts.map(
                 row =>
                     row.email
             )
+
         )
+
     ];
 
     const products = [
+
         ...new Set(
+
             employeeProducts.map(
                 row =>
                     row.product
             )
+
         )
+
     ];
 
     const datasets =
@@ -1269,23 +2027,31 @@ function updateEmployeeProductChart(
                         ),
 
                     data:
+
                         employees.map(
                             email => {
 
                                 const row =
                                     employeeProducts.find(
                                         item =>
+
                                             item.email ===
-                                                email &&
+                                            email
+
+                                            &&
+
                                             item.product ===
-                                                product
+                                            product
                                     );
 
                                 return row
+
                                     ? Number(
                                         row.interactions
                                     ) || 0
+
                                     : 0;
+
                             }
                         ),
 
@@ -1296,7 +2062,9 @@ function updateEmployeeProductChart(
                         color,
 
                     borderWidth: 1
+
                 };
+
             }
         );
 
@@ -1313,12 +2081,14 @@ function updateEmployeeProductChart(
         );
 
         return;
+
     }
 
     employeeAiChart =
         new Chart(
             canvas,
             {
+
                 type: 'bar',
 
                 data: {
@@ -1328,6 +2098,7 @@ function updateEmployeeProductChart(
 
                     datasets:
                         datasets
+
                 },
 
                 options: {
@@ -1337,7 +2108,9 @@ function updateEmployeeProductChart(
                     scales: {
 
                         x: {
+
                             stacked: true
+
                         },
 
                         y: {
@@ -1347,20 +2120,23 @@ function updateEmployeeProductChart(
 
                             stacked:
                                 true
+
                         }
+
                     }
+
                 }
+
             }
         );
+
 }
 
 // ============================================================
 // EMPLOYEE TABLE
 // ============================================================
 
-function updateTable(
-    employees
-) {
+function updateTable(employees) {
 
     const table =
         document.getElementById(
@@ -1415,13 +2191,16 @@ function updateTable(
                 Number(
                     employee.interactions
                 ) ||
+
                 (
+
                     gemini +
                     chatgpt +
                     claude +
                     copilot +
                     perplexity +
                     qwen
+
                 );
 
             const totalTokens =
@@ -1474,14 +2253,18 @@ function updateTable(
                 </td>
 
                 <td>
+
                     ${
                         employee.avg_latency_ms != null
+
                             ? Number(
                                 employee.avg_latency_ms
                             ).toFixed(0) +
                               ' ms'
+
                             : 'N/A'
                     }
+
                 </td>
 
                 <td>
@@ -1489,22 +2272,23 @@ function updateTable(
                         totalTokens
                     )}
                 </td>
+
             `;
 
             table.appendChild(
                 row
             );
+
         }
     );
+
 }
 
 // ============================================================
 // AI STATUS
 // ============================================================
 
-function updateAIStatus(
-    products
-) {
+function updateAIStatus(products) {
 
     const status =
         document.querySelector(
@@ -1544,7 +2328,9 @@ function updateAIStatus(
         }
 
         Connected
+
     `;
+
 }
 
 // ============================================================
@@ -1553,9 +2339,12 @@ function updateAIStatus(
 
 async function initializeDashboard() {
 
+    initializeDemoMode();
+
     await loadBnmExchangeRate();
 
     await loadDashboard();
+
 }
 
 initializeDashboard();
@@ -1563,13 +2352,11 @@ initializeDashboard();
 // ============================================================
 // AUTO REFRESH
 // ============================================================
-//
+
 // Refresh dashboard every 5 seconds.
 //
 // BNM itself is cached on the server for 15 minutes,
 // so this does NOT request BNM every 5 seconds.
-//
-// ============================================================
 
 setInterval(
     loadDashboard,

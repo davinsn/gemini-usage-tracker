@@ -25,6 +25,7 @@
 
 </head>
 
+
 <body>
 
 <div class="dashboard">
@@ -47,17 +48,17 @@
 
         </div>
 
+
         <div class="status">
 
-            <span
-                class="status-dot"
-            ></span>
+            <span class="status-dot"></span>
 
             API Connected
 
         </div>
 
     </header>
+
 
 
     <!-- =====================================================
@@ -82,6 +83,10 @@
 
         </div>
 
+
+        <!-- =================================================
+             MAIN METRICS
+        ================================================== -->
 
         <div class="metrics">
 
@@ -179,10 +184,20 @@
 
             </div>
 
+        </div>
 
-            <!-- ESTIMATED COST -->
 
-            <div class="metric-card">
+
+        <!-- =================================================
+             COST OVERVIEW
+        ================================================== -->
+
+        <div class="cost-overview">
+
+
+            <!-- ESTIMATED COST MYR -->
+
+            <div class="metric-card cost-card">
 
                 <span class="metric-label">
                     Estimated AI Cost
@@ -198,26 +213,10 @@
 
             </div>
 
-        </div>
 
+            <!-- ESTIMATED COST USD -->
 
-        <!-- =================================================
-             COST INFORMATION
-        ================================================== -->
-
-        <div
-            class="cost-information"
-            style="
-                margin-top: 20px;
-                display: flex;
-                gap: 20px;
-                flex-wrap: wrap;
-            "
-        >
-
-            <div
-                class="metric-card"
-            >
+            <div class="metric-card cost-card">
 
                 <span class="metric-label">
                     Estimated Cost (USD)
@@ -234,9 +233,9 @@
             </div>
 
 
-            <div
-                class="metric-card"
-            >
+            <!-- BNM RATE -->
+
+            <div class="metric-card cost-card">
 
                 <span class="metric-label">
                     BNM USD/MYR Rate
@@ -252,9 +251,261 @@
 
             </div>
 
+
+            <!-- =================================================
+                 DEMO MODE
+            ================================================== -->
+
+            <div class="demo-mode-panel">
+
+                <div class="demo-mode-title">
+                    Cost Demo Mode
+                </div>
+
+
+                <label class="demo-mode-toggle">
+
+                    <input
+                        type="checkbox"
+                        id="demoModeToggle"
+                    >
+
+                    <span>
+                        Enable Demo Mode
+                    </span>
+
+                </label>
+
+
+                <div class="demo-mode-controls">
+
+                    <label for="demoCostMultiplier">
+                        Cost Multiplier
+                    </label>
+
+                    <select id="demoCostMultiplier">
+
+                        <option value="10">
+                            ×10
+                        </option>
+
+                        <option
+                            value="100"
+                            selected
+                        >
+                            ×100
+                        </option>
+
+                        <option value="1000">
+                            ×1,000
+                        </option>
+
+                        <option value="10000">
+                            ×10,000
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <span
+                    id="demoModeIndicator"
+                    class="demo-mode-indicator"
+                    style="display: none;"
+                >
+                    DEMO MODE ACTIVE
+                </span>
+
+            </div>
+
+        </div>
+
+
+    </section>
+
+
+
+    <!-- =====================================================
+         COST BREAKDOWN
+    ====================================================== -->
+
+    <section class="dashboard-section cost-breakdown-section">
+
+
+        <div class="section-title">
+
+            <div>
+
+                <h2>
+                    Cost Breakdown
+                </h2>
+
+                <p>
+                    Understand estimated AI spending across
+                    platforms and token types
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="charts">
+
+
+            <!-- =================================================
+                 COST BY AI PLATFORM
+            ================================================== -->
+
+            <div class="chart-card">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Estimated Cost by AI
+                        </h2>
+
+                        <p>
+                            Estimated cost generated by each
+                            AI platform
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="providerCostChart"
+                    ></canvas>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 INPUT VS OUTPUT COST
+            ================================================== -->
+
+            <div class="chart-card">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            Input vs Output Cost
+                        </h2>
+
+                        <p>
+                            Estimated cost distribution between
+                            input and output tokens
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-container">
+
+                    <canvas
+                        id="costTypeChart"
+                    ></canvas>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 AI COST SUMMARY TABLE
+            ================================================== -->
+
+            <div class="chart-card wide">
+
+                <div class="chart-header">
+
+                    <div>
+
+                        <h2>
+                            AI Cost Summary
+                        </h2>
+
+                        <p>
+                            Estimated token usage and cost
+                            by AI platform
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="cost-table-wrapper">
+
+                    <table class="cost-table">
+
+                        <thead>
+
+                            <tr>
+
+                                <th>
+                                    AI Platform
+                                </th>
+
+                                <th>
+                                    Input Tokens
+                                </th>
+
+                                <th>
+                                    Output Tokens
+                                </th>
+
+                                <th>
+                                    Total Tokens
+                                </th>
+
+                                <th>
+                                    Est. Cost (USD)
+                                </th>
+
+                                <th>
+                                    Est. Cost (MYR)
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody id="costBreakdownTable">
+
+                            <!--
+                                Rows generated by dashboard.js
+                            -->
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+
         </div>
 
     </section>
+
 
 
     <!-- =====================================================
@@ -262,6 +513,7 @@
     ====================================================== -->
 
     <section class="platform-section">
+
 
         <div class="section-title">
 
@@ -285,11 +537,13 @@
             class="metrics provider-metrics"
         >
 
-            <!-- Provider cards can be generated here -->
+            <!-- Provider cards generated by dashboard.js -->
 
         </div>
 
+
     </section>
+
 
 
     <!-- =====================================================
@@ -297,6 +551,7 @@
     ====================================================== -->
 
     <section class="dashboard-section">
+
 
         <div class="section-title">
 
@@ -318,7 +573,9 @@
         <div class="charts">
 
 
-            <!-- INTERACTIONS BY AI -->
+            <!-- =================================================
+                 INTERACTIONS BY AI
+            ================================================== -->
 
             <div class="chart-card">
 
@@ -331,8 +588,8 @@
                         </h2>
 
                         <p>
-                            Number of interactions recorded for
-                            each AI platform
+                            Number of interactions recorded
+                            for each AI platform
                         </p>
 
                     </div>
@@ -351,7 +608,10 @@
             </div>
 
 
-            <!-- SESSIONS BY AI -->
+
+            <!-- =================================================
+                 SESSIONS BY AI
+            ================================================== -->
 
             <div class="chart-card">
 
@@ -364,8 +624,8 @@
                         </h2>
 
                         <p>
-                            Number of sessions started on each
-                            AI platform
+                            Number of sessions started on
+                            each AI platform
                         </p>
 
                     </div>
@@ -383,9 +643,11 @@
 
             </div>
 
+
         </div>
 
     </section>
+
 
 
     <!-- =====================================================
@@ -393,6 +655,7 @@
     ====================================================== -->
 
     <section class="dashboard-section">
+
 
         <div class="section-title">
 
@@ -403,7 +666,8 @@
                 </h2>
 
                 <p>
-                    Estimated token consumption across AI platforms
+                    Estimated token consumption across
+                    AI platforms
                 </p>
 
             </div>
@@ -414,7 +678,9 @@
         <div class="charts">
 
 
-            <!-- TOKENS BY AI -->
+            <!-- =================================================
+                 TOKENS BY AI
+            ================================================== -->
 
             <div class="chart-card wide">
 
@@ -427,8 +693,8 @@
                         </h2>
 
                         <p>
-                            Estimated total tokens processed by
-                            each AI platform
+                            Estimated total tokens processed
+                            by each AI platform
                         </p>
 
                     </div>
@@ -446,9 +712,11 @@
 
             </div>
 
+
         </div>
 
     </section>
+
 
 
     <!-- =====================================================
@@ -456,6 +724,7 @@
     ====================================================== -->
 
     <section class="dashboard-section">
+
 
         <div class="section-title">
 
@@ -477,7 +746,9 @@
         <div class="charts">
 
 
-            <!-- INTERACTIONS BY EMPLOYEE -->
+            <!-- =================================================
+                 INTERACTIONS BY EMPLOYEE
+            ================================================== -->
 
             <div class="chart-card wide">
 
@@ -509,7 +780,10 @@
             </div>
 
 
-            <!-- AI USAGE BY EMPLOYEE -->
+
+            <!-- =================================================
+                 AI USAGE BY EMPLOYEE
+            ================================================== -->
 
             <div class="chart-card wide">
 
@@ -522,7 +796,8 @@
                         </h2>
 
                         <p>
-                            Compare AI platform usage across employees
+                            Compare AI platform usage across
+                            employees
                         </p>
 
                     </div>
@@ -540,9 +815,11 @@
 
             </div>
 
+
         </div>
 
     </section>
+
 
 
     <!-- =====================================================
@@ -550,6 +827,7 @@
     ====================================================== -->
 
     <section class="dashboard-section">
+
 
         <div class="section-title">
 
@@ -560,7 +838,8 @@
                 </h2>
 
                 <p>
-                    Compare response performance across AI platforms
+                    Compare response performance across
+                    AI platforms
                 </p>
 
             </div>
@@ -571,7 +850,9 @@
         <div class="charts">
 
 
-            <!-- LATENCY -->
+            <!-- =================================================
+                 LATENCY
+            ================================================== -->
 
             <div class="chart-card wide">
 
@@ -603,9 +884,11 @@
 
             </div>
 
+
         </div>
 
     </section>
+
 
 
     <!-- =====================================================
@@ -613,6 +896,7 @@
     ====================================================== -->
 
     <section class="table-section">
+
 
         <div class="section-title">
 
@@ -623,8 +907,8 @@
                 </h2>
 
                 <p>
-                    Detailed breakdown of AI activity and estimated
-                    token usage by employee
+                    Detailed breakdown of AI activity and
+                    estimated token usage by employee
                 </p>
 
             </div>
@@ -634,7 +918,9 @@
 
         <div class="table-card">
 
+
             <div class="table-wrapper">
+
 
                 <table>
 
@@ -695,21 +981,25 @@
                     </thead>
 
 
-                    <tbody
-                        id="employeeTable"
-                    >
+                    <tbody id="employeeTable">
 
-                        <!-- Rows generated by dashboard.js -->
+                        <!--
+                            Rows generated by dashboard.js
+                        -->
 
                     </tbody>
 
+
                 </table>
 
+
             </div>
+
 
         </div>
 
     </section>
+
 
 
     <!-- =====================================================
@@ -722,24 +1012,22 @@
             Last updated:
         </span>
 
-        <strong
-            id="lastUpdated"
-        >
+        <strong id="lastUpdated">
             -
         </strong>
 
     </footer>
 
+
 </div>
 
 
-<!-- =====================================================
-     DASHBOARD JAVASCRIPT
-====================================================== -->
 
-<script
-    src="dashboard.js"
-></script>
+<!-- =========================================================
+     DASHBOARD JAVASCRIPT
+========================================================== -->
+
+<script src="dashboard.js"></script>
 
 
 </body>
