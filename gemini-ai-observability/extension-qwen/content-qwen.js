@@ -1,1400 +1,831 @@
-console.log('[qwen-obs] ===============================');
-console.log('[qwen-obs] CONTENT SCRIPT LOADED');
-console.log('[qwen-obs] URL:', location.href);
-console.log('[qwen-obs] ===============================');
+// ============================================================
+// QWEN AI USAGE COLLECTOR
+// OPENROUTER VERSION
+// ============================================================
 
 (() => {
 
-    // ============================================================
-    // INJECT QWEN NETWORK DETECTOR
-    // ============================================================
+    'use strict';
 
-    const injectQwenNetworkDetector = () => {
-        if (
-            document.documentElement.dataset
-                .qwenObsNetworkInjected === 'true'
-        ) {
-            return;
+    console.log('[qwen-obs] =================================');
+    console.log('[qwen-obs] QWEN OPENROUTER COLLECTOR LOADED');
+    console.log('[qwen-obs] =================================');
+
+    // ========================================================
+    // CONFIGURATION
+    // ========================================================
+
+    const API_BASE =
+        'http://localhost:4000';
+
+    const CHAT_ENDPOINT =
+        `${API_BASE}/api/openrouter/chat`;
+
+    // Change this to whichever Qwen model you want.
+    const QWEN_MODEL =
+        'qwen/qwen3-30b-a3b';
+
+    const SESSION_STORAGE_KEY =
+        'qwen_obs_session_id';
+
+    const EMAIL_STORAGE_KEY =
+        'qwen_obs_email';
+
+    // ========================================================
+    // SESSION
+    // ========================================================
+
+    function getSessionId() {
+
+        let sessionId =
+            sessionStorage.getItem(
+                SESSION_STORAGE_KEY
+            );
+
+        if (!sessionId) {
+
+            sessionId =
+                crypto.randomUUID();
+
+            sessionStorage.setItem(
+                SESSION_STORAGE_KEY,
+                sessionId
+            );
         }
 
-        document.documentElement.dataset
-            .qwenObsNetworkInjected = 'true';
-
-        const script = document.createElement('script');
-
-        script.src = chrome.runtime.getURL(
-            'qwen-network.js'
-        );
-
-        script.onload = () => {
-            console.log(
-                '[qwen-obs] Qwen network detector injected'
-            );
-
-            script.remove();
-        };
-
-        script.onerror = (error) => {
-            console.error(
-                '[qwen-obs] Failed to inject Qwen network detector:',
-                error
-            );
-        };
-
-        (
-            document.head ||
-            document.documentElement
-        ).appendChild(script);
-    };
-
-    injectQwenNetworkDetector();
-
-    console.log('[qwen-obs] IIFE STARTED');
-    console.log('[qwen-obs] VERSION = API-V3 + TOKEN-ESTIMATION');
-    console.log('[qwen-obs] ACCOUNT DETECTION = QWEN AUTH API ONLY');
-    console.log('[qwen-obs] DOM ACCOUNT DETECTION = DISABLED');
-
-    // ============================================================
-    // CONFIG
-    // ============================================================
-
-    const cfg = window.QWEN_OBS_CONFIG;
-
-    console.log('[qwen-obs] CONFIG:', cfg);
-
-    if (!cfg?.apiBaseUrl) {
-        console.error(
-            '[qwen-obs] STOPPED: apiBaseUrl is missing'
-        );
-        return;
+        return sessionId;
     }
 
-    // ============================================================
-    // QWEN ACCOUNT API
-    // ============================================================
+    const sessionId =
+        getSessionId();
 
-    const QWEN_AUTH_ENDPOINT = '/api/v1/auths/';
+    // ========================================================
+    // EMAIL DETECTION
+    // ========================================================
 
-    const EMAIL_REGEX =
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    function isValidEmail(value) {
 
-    // ============================================================
-    // MODEL DETECTION
-    // ============================================================
+        return (
+            typeof value === 'string' &&
+            /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)
+        );
+    }
 
-    let currentQwenModel = 'unknown';
+    function findEmailInText(text) {
 
-    console.log(
-        '[qwen-obs] Initial model:',
-        currentQwenModel
-    );
-
-    // ============================================================
-    // RECEIVE MODEL FROM QWEN NETWORK DETECTOR
-    // ============================================================
-
-    window.addEventListener('message', (event) => {
-
-        if (event.source !== window) {
-            return;
+        if (
+            typeof text !== 'string'
+        ) {
+            return null;
         }
 
-        const data = event.data;
+        const match =
+            text.match(
+                /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+            );
 
-        if (!data) {
+        return match
+            ? match[0]
+            : null;
+    }
+
+    function detectEmail() {
+
+        // ----------------------------------------------------
+        // Previously detected email
+        // ----------------------------------------------------
+
+        const storedEmail =
+            localStorage.getItem(
+                EMAIL_STORAGE_KEY
+            );
+
+        if (
+            isValidEmail(storedEmail)
+        ) {
+            return storedEmail;
+        }
+
+        // ----------------------------------------------------
+        // DOM text
+        // ----------------------------------------------------
+
+        const bodyText =
+            document.body?.innerText || '';
+
+        const bodyEmail =
+            findEmailInText(bodyText);
+
+        if (bodyEmail) {
+
+            localStorage.setItem(
+                EMAIL_STORAGE_KEY,
+                bodyEmail
+            );
+
+            console.log(
+                '[qwen-obs] Employee detected:',
+                bodyEmail
+            );
+
+            return bodyEmail;
+        }
+
+        // ----------------------------------------------------
+        // Attributes
+        // ----------------------------------------------------
+
+        const elements =
+            document.querySelectorAll(
+                '[data-email], [data-user-email], [aria-label], [title]'
+            );
+
+        for (
+            const element of elements
+        ) {
+
+            const candidates = [
+                element.getAttribute('data-email'),
+                element.getAttribute('data-user-email'),
+                element.getAttribute('aria-label'),
+                element.getAttribute('title')
+            ];
+
+            for (
+                const candidate of candidates
+            ) {
+
+                const email =
+                    findEmailInText(
+                        candidate || ''
+                    );
+
+                if (email) {
+
+                    localStorage.setItem(
+                        EMAIL_STORAGE_KEY,
+                        email
+                    );
+
+                    console.log(
+                        '[qwen-obs] Employee detected:',
+                        email
+                    );
+
+                    return email;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // ========================================================
+    // FIND COMPOSER
+    // ========================================================
+
+    function findComposer() {
+
+        const selectors = [
+
+            // Common textarea
+            'textarea',
+
+            // Content editable
+            '[contenteditable="true"]',
+
+            // Qwen-style editor candidates
+            'div[role="textbox"]',
+
+            // Inputs
+            'textarea[placeholder]',
+            '[contenteditable="true"][data-placeholder]'
+        ];
+
+        for (
+            const selector of selectors
+        ) {
+
+            const elements =
+                document.querySelectorAll(
+                    selector
+                );
+
+            for (
+                const element of elements
+            ) {
+
+                if (
+                    !element.offsetParent
+                ) {
+                    continue;
+                }
+
+                return element;
+            }
+        }
+
+        return null;
+    }
+
+    // ========================================================
+    // GET COMPOSER TEXT
+    // ========================================================
+
+    function getComposerText(composer) {
+
+        if (!composer) {
+            return '';
+        }
+
+        if (
+            composer.tagName ===
+            'TEXTAREA'
+        ) {
+            return composer.value.trim();
+        }
+
+        return (
+            composer.innerText ||
+            composer.textContent ||
+            ''
+        ).trim();
+    }
+
+    // ========================================================
+    // CLEAR COMPOSER
+    // ========================================================
+
+    function clearComposer(composer) {
+
+        if (!composer) {
             return;
         }
 
         if (
-            data.source !== 'qwen-observability' ||
-            data.type !== 'QWEN_MODEL_DETECTED'
+            composer.tagName ===
+            'TEXTAREA'
         ) {
+
+            composer.value = '';
+
+            composer.dispatchEvent(
+                new Event(
+                    'input',
+                    {
+                        bubbles: true
+                    }
+                )
+            );
+
             return;
         }
 
-        if (
-            typeof data.model !== 'string' ||
-            !data.model.trim()
+        composer.innerHTML = '';
+
+        composer.dispatchEvent(
+            new InputEvent(
+                'input',
+                {
+                    bubbles: true,
+                    inputType:
+                        'deleteContentBackward'
+                }
+            )
+        );
+    }
+
+    // ========================================================
+    // FIND SEND BUTTON
+    // ========================================================
+
+    function findSendButton() {
+
+        const selectors = [
+
+            'button[type="submit"]',
+
+            'button[aria-label*="Send" i]',
+
+            'button[title*="Send" i]',
+
+            'button[data-testid*="send" i]',
+
+            '[role="button"][aria-label*="Send" i]',
+
+            '[role="button"][title*="Send" i]'
+        ];
+
+        for (
+            const selector of selectors
         ) {
+
+            const elements =
+                document.querySelectorAll(
+                    selector
+                );
+
+            for (
+                const element of elements
+            ) {
+
+                if (
+                    !element.offsetParent
+                ) {
+                    continue;
+                }
+
+                return element;
+            }
+        }
+
+        return null;
+    }
+
+    // ========================================================
+    // FIND CONVERSATION CONTAINER
+    // ========================================================
+
+    function findConversationContainer() {
+
+        const selectors = [
+
+            'main',
+
+            '[role="main"]',
+
+            '[class*="conversation" i]',
+
+            '[class*="chat" i]',
+
+            '[class*="message" i]'
+        ];
+
+        for (
+            const selector of selectors
+        ) {
+
+            const element =
+                document.querySelector(
+                    selector
+                );
+
+            if (
+                element &&
+                element.offsetParent
+            ) {
+                return element;
+            }
+        }
+
+        return document.body;
+    }
+
+    // ========================================================
+    // ADD ASSISTANT MESSAGE
+    // ========================================================
+
+    function addAssistantMessage(
+        text
+    ) {
+
+        const container =
+            findConversationContainer();
+
+        const wrapper =
+            document.createElement(
+                'div'
+            );
+
+        wrapper.className =
+            'qwen-obs-assistant-message';
+
+        wrapper.style.padding =
+            '12px 16px';
+
+        wrapper.style.margin =
+            '12px 0';
+
+        wrapper.style.borderRadius =
+            '12px';
+
+        wrapper.style.background =
+            'rgba(0,0,0,0.04)';
+
+        const label =
+            document.createElement(
+                'div'
+            );
+
+        label.textContent =
+            'Qwen';
+
+        label.style.fontWeight =
+            '600';
+
+        label.style.marginBottom =
+            '6px';
+
+        const content =
+            document.createElement(
+                'div'
+            );
+
+        content.textContent =
+            text;
+
+        content.style.whiteSpace =
+            'pre-wrap';
+
+        wrapper.appendChild(
+            label
+        );
+
+        wrapper.appendChild(
+            content
+        );
+
+        container.appendChild(
+            wrapper
+        );
+
+        wrapper.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end'
+        });
+    }
+
+    // ========================================================
+    // ADD USER MESSAGE
+    // ========================================================
+
+    function addUserMessage(
+        text
+    ) {
+
+        const container =
+            findConversationContainer();
+
+        const wrapper =
+            document.createElement(
+                'div'
+            );
+
+        wrapper.className =
+            'qwen-obs-user-message';
+
+        wrapper.style.padding =
+            '12px 16px';
+
+        wrapper.style.margin =
+            '12px 0';
+
+        wrapper.style.whiteSpace =
+            'pre-wrap';
+
+        wrapper.textContent =
+            text;
+
+        container.appendChild(
+            wrapper
+        );
+    }
+
+    // ========================================================
+    // SHOW LOADING
+    // ========================================================
+
+    function showLoading() {
+
+        const container =
+            findConversationContainer();
+
+        const loading =
+            document.createElement(
+                'div'
+            );
+
+        loading.id =
+            'qwen-obs-loading';
+
+        loading.textContent =
+            'Qwen is thinking...';
+
+        loading.style.padding =
+            '12px 16px';
+
+        loading.style.opacity =
+            '0.6';
+
+        container.appendChild(
+            loading
+        );
+
+        loading.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end'
+        });
+    }
+
+    // ========================================================
+    // REMOVE LOADING
+    // ========================================================
+
+    function removeLoading() {
+
+        const loading =
+            document.getElementById(
+                'qwen-obs-loading'
+            );
+
+        if (loading) {
+            loading.remove();
+        }
+    }
+
+    // ========================================================
+    // SEND TO OPENROUTER
+    // ========================================================
+
+    async function sendToOpenRouter(
+        prompt
+    ) {
+
+        const email =
+            detectEmail();
+
+        if (!email) {
+
+            throw new Error(
+                'Unable to determine Qwen employee email'
+            );
+        }
+
+        console.log(
+            '[qwen-obs] Sending interaction to OpenRouter'
+        );
+
+        const response =
+            await fetch(
+                CHAT_ENDPOINT,
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            email,
+
+                            model:
+                                QWEN_MODEL,
+
+                            session_id:
+                                sessionId,
+
+                            messages: [
+                                {
+                                    role:
+                                        'user',
+
+                                    content:
+                                        prompt
+                                }
+                            ]
+                        })
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+
+            throw new Error(
+                data?.details?.error?.message ||
+                data?.error ||
+                'OpenRouter request failed'
+            );
+        }
+
+        return data;
+    }
+
+    // ========================================================
+    // HANDLE SUBMISSION
+    // ========================================================
+
+    let processing =
+        false;
+
+    async function handleSubmit(
+        composer
+    ) {
+
+        if (processing) {
             return;
         }
 
-        const detectedModel = data.model.trim();
+        const prompt =
+            getComposerText(
+                composer
+            );
 
-        if (
-            currentQwenModel === detectedModel
-        ) {
+        if (!prompt) {
             return;
         }
 
-        currentQwenModel = detectedModel;
-
-/*
- * If an interaction is already being tracked,
- * update its model as soon as the network detector
- * discovers it.
- */
-if (
-    typeof activeInteraction !== 'undefined' &&
-    activeInteraction &&
-    (
-        !activeInteraction.model ||
-        activeInteraction.model === 'unknown'
-    )
-) {
-    activeInteraction.model =
-        detectedModel;
-
-    console.log(
-        '[qwen-obs] Active interaction model updated:',
-        detectedModel
-    );
-}
-
-console.log(
-    '[qwen-obs] ================================='
-);
-
-        console.log(
-            '[qwen-obs] QWEN MODEL AUTO-DETECTED'
-        );
-
-        console.log(
-            '[qwen-obs] Model:',
-            currentQwenModel
-        );
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-    });
-
-    // ============================================================
-    // EXTRACT EMAIL
-    // ============================================================
-
-    const extractEmailFromAuthResponse = (data) => {
-
-        if (!data || typeof data !== 'object') {
-            return null;
-        }
-
-        const candidate = data.email;
-
-        if (typeof candidate !== 'string') {
-            return null;
-        }
-
-        const email = candidate
-            .trim()
-            .toLowerCase();
-
-        if (!EMAIL_REGEX.test(email)) {
-            return null;
-        }
-
-        return email;
-    };
-
-    // ============================================================
-    // FETCH QWEN ACCOUNT
-    // ============================================================
-
-    const fetchQwenAccount = async () => {
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        console.log(
-            '[qwen-obs] STARTING QWEN ACCOUNT DETECTION'
-        );
-
-        console.log(
-            '[qwen-obs] METHOD: QWEN AUTH API'
-        );
-
-        console.log(
-            '[qwen-obs] ENDPOINT:',
-            QWEN_AUTH_ENDPOINT
-        );
-
-        console.log(
-            '[qwen-obs] DOM ACCOUNT DETECTION: DISABLED'
-        );
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
+        processing = true;
 
         try {
 
-            const response = await fetch(
-                QWEN_AUTH_ENDPOINT,
+            console.log(
+                '[qwen-obs] User submitted prompt'
+            );
+
+            // Prevent Qwen's own request
+            clearComposer(
+                composer
+            );
+
+            addUserMessage(
+                prompt
+            );
+
+            showLoading();
+
+            const data =
+                await sendToOpenRouter(
+                    prompt
+                );
+
+            removeLoading();
+
+            addAssistantMessage(
+                data.response ||
+                ''
+            );
+
+            console.log(
+                '[qwen-obs] Interaction completed:',
                 {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        'Accept': 'application/json'
-                    }
+                    model:
+                        data.model,
+
+                    prompt_tokens:
+                        data.usage?.prompt_tokens,
+
+                    response_tokens:
+                        data.usage?.response_tokens,
+
+                    total_tokens:
+                        data.usage?.total_tokens,
+
+                    latency_ms:
+                        data.latency_ms
                 }
             );
-
-            console.log(
-                '[qwen-obs] Qwen auth API status:',
-                response.status
-            );
-
-            if (!response.ok) {
-
-                console.error(
-                    '[qwen-obs] Qwen auth API request failed:',
-                    response.status,
-                    response.statusText
-                );
-
-                return null;
-            }
-
-            const contentType =
-                response.headers.get('content-type') || '';
-
-            console.log(
-                '[qwen-obs] Content-Type:',
-                contentType
-            );
-
-            if (!contentType.includes('application/json')) {
-
-                console.error(
-                    '[qwen-obs] Qwen auth API did not return JSON'
-                );
-
-                return null;
-            }
-
-            /*
-             * IMPORTANT:
-             *
-             * Do NOT console.log(data).
-             *
-             * The response may contain a JWT token.
-             */
-
-            const data = await response.json();
-
-            console.log(
-                '[qwen-obs] Qwen auth response received'
-            );
-
-            const email =
-                extractEmailFromAuthResponse(data);
-
-            if (!email) {
-
-                console.error(
-                    '[qwen-obs] QWEN ACCOUNT NOT DETECTED'
-                );
-
-                console.error(
-                    '[qwen-obs] Auth API response did not contain a valid email'
-                );
-
-                return null;
-            }
-
-            console.log(
-                '[qwen-obs] ================================='
-            );
-
-            console.log(
-                '[qwen-obs] QWEN ACCOUNT DETECTED'
-            );
-
-            console.log(
-                '[qwen-obs] Employee:',
-                email
-            );
-
-            console.log(
-                '[qwen-obs] ================================='
-            );
-
-            return email;
 
         } catch (error) {
 
+            removeLoading();
+
             console.error(
-                '[qwen-obs] QWEN AUTH API ERROR:',
+                '[qwen-obs] ERROR:',
                 error
             );
 
-            return null;
+            addAssistantMessage(
+                `Unable to contact OpenRouter.\n\n${error.message}`
+            );
+
+        } finally {
+
+            processing = false;
         }
-    };
-
-    // ============================================================
-    // ACCOUNT STATE
-    // ============================================================
-
-    let employeeEmail = null;
-
-    let collectorInitialized = false;
-
-    // ============================================================
-    // TOKEN ESTIMATION
-    // ============================================================
-
-    const estimateTokens = (text) => {
-
-        if (!text) {
-            return 0;
-        }
-
-        /*
-         * Rough token estimate.
-         *
-         * Approximation:
-         * ~1 token per 4 characters.
-         *
-         * This is NOT the official Qwen tokenizer.
-         * It is intended for usage estimation only.
-         */
-
-        return Math.ceil(text.length / 4);
-    };
-
-    // ============================================================
-    // INITIALIZE COLLECTOR
-    // ============================================================
-
-    const initializeCollector = () => {
-
-        if (collectorInitialized) {
-
-            console.warn(
-                '[qwen-obs] Collector already initialized'
-            );
-
-            return;
-        }
-
-        if (!employeeEmail) {
-
-            console.error(
-                '[qwen-obs] Collector cannot start: no employee email'
-            );
-
-            return;
-        }
-
-        collectorInitialized = true;
-
-        // ========================================================
-        // SESSION
-        // ========================================================
-
-        const sessionId = crypto.randomUUID();
-
-        let activeInteraction = null;
-
-        let lastPromptSignature = null;
-
-        let lastKnownPrompt = '';
-
-        let completionTimer = null;
-
-        let lastInteractionStartedAt = 0;
-
-        /*
-         * Track the response that existed before the interaction.
-         * This prevents an old response from being counted.
-         */
-        let previousResponseSnapshot = '';
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        console.log(
-            '[qwen-obs] INITIALIZING QWEN COLLECTOR'
-        );
-
-        console.log(
-            '[qwen-obs] Employee:',
-            employeeEmail
-        );
-
-        console.log(
-            '[qwen-obs] Session:',
-            sessionId
-        );
-
-        console.log(
-            '[qwen-obs] Model:',
-            currentQwenModel
-        );
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        // ========================================================
-        // SEND EVENT
-        // ========================================================
-
-        const send = (event) => {
-
-            if (!employeeEmail) {
-
-                console.error(
-                    '[qwen-obs] EVENT BLOCKED: No employee email'
-                );
-
-                return;
-            }
-
-            const payload = {
-
-                type: 'QWEN_USAGE_EVENT',
-
-                provider: 'alibaba',
-
-                product: 'qwen',
-
-                employeeEmail: employeeEmail,
-
-                event: {
-
-                    email: employeeEmail,
-
-                    provider: 'alibaba',
-
-                    product: 'qwen',
-
-                    department:
-                        cfg.department ?? null,
-
-                    role:
-                        cfg.role ?? null,
-
-                    session_id:
-                        sessionId,
-
-                    occurred_at:
-                        new Date().toISOString(),
-
-                    ...event
-                }
-            };
-
-            console.log(
-                '[qwen-obs] ==============================='
-            );
-
-            console.log(
-                '[qwen-obs] SENDING EVENT'
-            );
-
-            console.log(
-                '[qwen-obs] employeeEmail:',
-                employeeEmail
-            );
-
-            console.log(
-                '[qwen-obs] event_type:',
-                event.event_type
-            );
-
-            /*
-             * Do NOT log the complete payload.
-             *
-             * It may contain prompt/response information.
-             */
-
-            chrome.runtime
-                .sendMessage(payload)
-                .then(response => {
-
-                    console.log(
-                        '[qwen-obs] BACKGROUND RESPONSE:',
-                        response
-                    );
-
-                    if (!response?.accepted) {
-
-                        console.error(
-                            '[qwen-obs] EVENT REJECTED:',
-                            response
-                        );
-
-                        return;
-                    }
-
-                    console.log(
-                        '[qwen-obs] EVENT ACCEPTED BY SERVICE WORKER'
-                    );
-
-                })
-                .catch(error => {
-
-                    console.error(
-                        '[qwen-obs] SERVICE WORKER ERROR:',
-                        error
-                    );
-                });
-        };
-
-        // ========================================================
-        // FIND PROMPT INPUT
-        // ========================================================
-
-        const findPromptInput = () => {
-
-            const candidates = [
-                ...document.querySelectorAll(
-                    'textarea, [contenteditable="true"], [role="textbox"]'
-                )
-            ];
-
-            const visible =
-                candidates.filter(el => {
-
-                    const rect =
-                        el.getBoundingClientRect();
-
-                    const style =
-                        getComputedStyle(el);
-
-                    return (
-                        rect.width > 0 &&
-                        rect.height > 0 &&
-                        style.display !== 'none' &&
-                        style.visibility !== 'hidden' &&
-                        !el.disabled
-                    );
-                });
+    }
+
+    // ========================================================
+    // KEYBOARD HANDLER
+    // ========================================================
+
+    document.addEventListener(
+        'keydown',
+        event => {
 
             const composer =
-                visible.find(el =>
-                    el.tagName === 'TEXTAREA' ||
-                    el.getAttribute('contenteditable') === 'true'
+                event.target?.closest?.(
+                    'textarea, [contenteditable="true"], [role="textbox"]'
                 );
 
-            return composer ||
-                visible[0] ||
-                null;
-        };
-
-        // ========================================================
-        // GET INPUT TEXT
-        // ========================================================
-
-        const getInputText = (input) => {
-
-            if (!input) {
-                return '';
+            if (!composer) {
+                return;
             }
+
+            // Enter = submit
+            // Shift + Enter = newline
 
             if (
-                input instanceof HTMLTextAreaElement ||
-                input instanceof HTMLInputElement
-            ) {
-                return input.value || '';
-            }
-
-            return (
-                input.innerText ||
-                input.textContent ||
-                ''
-            );
-        };
-
-        // ========================================================
-        // GET QWEN RESPONSE
-        // ========================================================
-
-        const getQwenResponseText = () => {
-
-            const selectorCandidates = [
-
-                '[data-message-author-role="assistant"]',
-
-                '[class*="assistant" i] [class*="markdown" i]',
-
-                '[class*="response" i] [class*="markdown" i]',
-
-                '[class*="markdown" i]'
-            ];
-
-            let candidates = [];
-
-            for (
-                const selector
-                of selectorCandidates
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.isComposing
             ) {
 
-                candidates = [
-                    ...document.querySelectorAll(selector)
-                ];
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
 
-                if (candidates.length) {
-                    break;
-                }
+                handleSubmit(
+                    composer
+                );
             }
-
-            const visible =
-                candidates.filter(el => {
-
-                    const rect =
-                        el.getBoundingClientRect();
-
-                    return (
-                        rect.width > 0 &&
-                        rect.height > 0
-                    );
-                });
-
-            if (!visible.length) {
-                return '';
-            }
-
-            const latest =
-                visible[visible.length - 1];
-
-            return (
-                latest.innerText ||
-                latest.textContent ||
-                ''
-            ).trim();
-        };
-
-        // ========================================================
-        // START INTERACTION
-        // ========================================================
-
-const startInteraction = () => {
-    const now = Date.now();
-
-    /*
-     * Prevent Enter + Send button
-     * from creating two interactions.
-     */
-    if (
-        now -
-        lastInteractionStartedAt <
-        500
-    ) {
-        console.log(
-            '[qwen-obs] Duplicate submit ignored'
-        );
-        return;
-    }
-
-    lastInteractionStartedAt = now;
-
-    const input =
-        findPromptInput();
-
-    let prompt = '';
-
-    if (input) {
-        prompt =
-            getInputText(input).trim();
-    }
-
-    if (!prompt) {
-        prompt =
-            lastKnownPrompt;
-    }
-
-    if (!prompt) {
-        console.warn(
-            '[qwen-obs] Could not capture prompt'
-        );
-        return;
-    }
-
-    /*
-     * Capture whatever response existed before
-     * this interaction.
-     */
-    previousResponseSnapshot =
-        getQwenResponseText();
-
-    console.log(
-        '[qwen-obs] ================================='
+        },
+        true
     );
 
-    console.log(
-        '[qwen-obs] PROMPT CAPTURED'
-    );
+    // ========================================================
+    // SEND BUTTON HANDLER
+    // ========================================================
 
-    console.log(
-        '[qwen-obs] Prompt length:',
-        prompt.length
-    );
+    document.addEventListener(
+        'click',
+        event => {
 
-    const promptTokens =
-        estimateTokens(prompt);
-
-    console.log(
-        '[qwen-obs] Estimated prompt tokens:',
-        promptTokens
-    );
-
-    console.log(
-        '[qwen-obs] Current model before network detection:',
-        currentQwenModel
-    );
-
-    console.log(
-        '[qwen-obs] ================================='
-    );
-
-    const signature =
-        `${prompt.length}:${prompt}`;
-
-    if (
-        activeInteraction &&
-        activeInteraction.signature === signature
-    ) {
-        console.log(
-            '[qwen-obs] Duplicate interaction ignored'
-        );
-        return;
-    }
-
-    if (
-        signature === lastPromptSignature &&
-        !activeInteraction
-    ) {
-        console.log(
-            '[qwen-obs] Same prompt already processed'
-        );
-        return;
-    }
-
-    lastPromptSignature =
-        signature;
-
-    const interactionId =
-        crypto.randomUUID();
-
-    const startedAt =
-        Date.now();
-
-    /*
-     * Store the interaction immediately.
-     *
-     * The model may still be unknown at this point.
-     * We will wait for the Qwen network detector
-     * before sending interaction_started.
-     */
-    activeInteraction = {
-        interactionId,
-        startedAt,
-        signature,
-        prompt,
-        model: currentQwenModel || 'unknown',
-        promptLength:
-            prompt.length,
-        promptTokens:
-            promptTokens,
-        previousResponse:
-            previousResponseSnapshot
-    };
-
-    /*
-     * Wait for the network detector to identify
-     * the actual Qwen model.
-     */
-    const waitForModelAndSend = () => {
-
-        const maxWait = 1500;
-        const checkInterval = 50;
-
-        const waitStartedAt =
-            Date.now();
-
-        const checkModel = () => {
-
-            /*
-             * If the network detector has already
-             * identified the model, use it.
-             */
-            if (
-                currentQwenModel &&
-                currentQwenModel !== 'unknown'
-            ) {
-
-                activeInteraction.model =
-                    currentQwenModel;
-
-                console.log(
-                    '[qwen-obs] Model available before event:',
-                    currentQwenModel
+            const button =
+                event.target?.closest?.(
+                    'button, [role="button"]'
                 );
 
-                send({
-                    event_type:
-                        'interaction_started',
-
-                    interaction_id:
-                        interactionId,
-
-                    model:
-                        currentQwenModel,
-
-                    prompt_length:
-                        prompt.length,
-
-                    prompt_tokens:
-                        promptTokens,
-
-                    metadata: {
-                        collector:
-                            'api-v3',
-
-                        prompt_capture:
-                            'pre-submit',
-
-                        model_detection:
-                            'qwen-network',
-
-                        token_estimation:
-                            'characters-divided-by-4'
-                    }
-                });
-
-                lastKnownPrompt = '';
-
+            if (!button) {
                 return;
             }
 
-            /*
-             * Wait until the timeout.
-             */
-            if (
-                Date.now() -
-                waitStartedAt <
-                maxWait
-            ) {
-
-                setTimeout(
-                    checkModel,
-                    checkInterval
-                );
-
-                return;
-            }
-
-            /*
-             * Network detector did not provide
-             * a model in time.
-             */
-            const fallbackModel =
-                currentQwenModel || 'unknown';
-
-            activeInteraction.model =
-                fallbackModel;
-
-            console.warn(
-                '[qwen-obs] Model detection timeout'
-            );
-
-            console.warn(
-                '[qwen-obs] Using model:',
-                fallbackModel
-            );
-
-            send({
-                event_type:
-                    'interaction_started',
-
-                interaction_id:
-                    interactionId,
-
-                model:
-                    fallbackModel,
-
-                prompt_length:
-                    prompt.length,
-
-                prompt_tokens:
-                    promptTokens,
-
-                metadata: {
-                    collector:
-                        'api-v3',
-
-                    prompt_capture:
-                        'pre-submit',
-
-                    model_detection:
-                        fallbackModel === 'unknown'
-                            ? 'timeout'
-                            : 'qwen-network',
-
-                    token_estimation:
-                        'characters-divided-by-4'
-                }
-            });
-
-            lastKnownPrompt = '';
-        };
-
-        checkModel();
-    };
-
-    waitForModelAndSend();
-};
-
-        // ========================================================
-        // COMPLETE INTERACTION
-        // ========================================================
-
-        const completeInteraction = () => {
-
-            if (!activeInteraction) {
-                return;
-            }
-
-            const interaction =
-                activeInteraction;
-
-            const response =
-                getQwenResponseText();
-
-            /*
-             * Don't complete if Qwen has not produced
-             * a response yet.
-             */
-
-            if (!response) {
-
-                console.log(
-                    '[qwen-obs] Waiting for Qwen response...'
-                );
-
-                return;
-            }
-
-            /*
-             * If the response is exactly the same as the
-             * response that existed before submission,
-             * it is probably the old response.
-             */
-
-            if (
-                interaction.previousResponse &&
-                response === interaction.previousResponse
-            ) {
-
-                console.log(
-                    '[qwen-obs] Response unchanged; waiting...'
-                );
-
-                return;
-            }
-
-            const latency =
-                Date.now() -
-                interaction.startedAt;
-
-            const responseLength =
-                response.length;
-
-            const responseTokens =
-                estimateTokens(response);
-
-            const totalTokens =
-                interaction.promptTokens +
-                responseTokens;
-
-            console.log(
-                '[qwen-obs] ================================='
-            );
-
-            console.log(
-                '[qwen-obs] COMPLETING INTERACTION'
-            );
-
-            console.log(
-                '[qwen-obs] Interaction ID:',
-                interaction.interactionId
-            );
-
-            console.log(
-                '[qwen-obs] Response length:',
-                responseLength
-            );
-
-            console.log(
-                '[qwen-obs] Latency:',
-                latency
-            );
-
-            console.log(
-                '[qwen-obs] Estimated prompt tokens:',
-                interaction.promptTokens
-            );
-
-            console.log(
-                '[qwen-obs] Estimated response tokens:',
-                responseTokens
-            );
-
-            console.log(
-                '[qwen-obs] Estimated total tokens:',
-                totalTokens
-            );
-
-            console.log(
-                '[qwen-obs] ================================='
-            );
-
-            send({
-
-                event_type:
-                    'interaction_completed',
-
-                interaction_id:
-                    interaction.interactionId,
-
-                model:
-                    interaction.model,
-
-                prompt_length:
-                    interaction.promptLength,
-
-                response_length:
-                    responseLength,
-
-                prompt_tokens:
-                    interaction.promptTokens,
-
-                response_tokens:
-                    responseTokens,
-
-                total_tokens:
-                    totalTokens,
-
-                latency_ms:
-                    latency,
-
-                metadata: {
-
-                    collector:
-                        'api-v3',
-
-                    completion_detection:
-                        'mutation-idle',
-
-                    token_estimation:
-                        'characters-divided-by-4'
-                }
-            });
-
-            activeInteraction = null;
-
-            clearTimeout(
-                completionTimer
-            );
-
-            completionTimer = null;
-        };
-
-        // ========================================================
-        // ENTER
-        // ========================================================
-
-        document.addEventListener(
-            'keydown',
-            event => {
-
-                if (event.key !== 'Enter') {
-                    return;
-                }
-
-                if (event.shiftKey) {
-                    return;
-                }
-
-                const input =
-                    findPromptInput();
-
-                const targetIsInput =
-                    input &&
-                    (
-                        event.target === input ||
-                        input.contains?.(event.target)
-                    );
-
-                if (!targetIsInput) {
-                    return;
-                }
-
-                startInteraction();
-            },
-            true
-        );
-
-        // ========================================================
-        // SEND BUTTON
-        // ========================================================
-
-        document.addEventListener(
-            'click',
-            event => {
-
-                const button =
-                    event.target?.closest?.('button');
-
-                if (!button) {
-                    return;
-                }
-
-                const combined = [
-
+            const text =
+                (
                     button.getAttribute(
                         'aria-label'
-                    ),
-
+                    ) ||
                     button.getAttribute(
                         'title'
-                    ),
+                    ) ||
+                    button.textContent ||
+                    ''
+                ).toLowerCase();
 
-                    button.innerText
-
-                ]
-                    .filter(Boolean)
-                    .join(' ');
-
-                const isSend =
-                    /send|submit|ask/i.test(combined) &&
-                    !button.disabled;
-
-                if (!isSend) {
-                    return;
-                }
-
-                startInteraction();
-            },
-            true
-        );
-
-        // ========================================================
-        // MUTATION OBSERVER
-        // ========================================================
-
-        const observer =
-            new MutationObserver(() => {
-
-                if (!activeInteraction) {
-                    return;
-                }
-
-                clearTimeout(
-                    completionTimer
-                );
-
-                completionTimer =
-                    setTimeout(() => {
-
-                        const response =
-                            getQwenResponseText();
-
-                        if (!response) {
-                            return;
-                        }
-
-                        /*
-                         * Make sure response actually changed
-                         * from what existed before submission.
-                         */
-
-                        if (
-                            activeInteraction.previousResponse &&
-                            response ===
-                            activeInteraction.previousResponse
-                        ) {
-                            return;
-                        }
-
-                        completeInteraction();
-
-                    }, 2500);
-            });
-
-        observer.observe(
-            document.documentElement,
-            {
-                childList: true,
-                subtree: true,
-                characterData: true
+            if (
+                !text.includes('send')
+            ) {
+                return;
             }
-        );
 
-        // ========================================================
-        // SESSION START
-        // ========================================================
+            const composer =
+                findComposer();
 
-        send({
-
-            event_type:
-                'session_started',
-
-            interaction_id:
-                crypto.randomUUID(),
-
-            metadata: {
-
-                collector:
-                    'api-v3',
-
-                url_host:
-                    location.host
+            if (!composer) {
+                return;
             }
-        });
 
-        // ========================================================
-        // READY
-        // ========================================================
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
 
-        console.log(
-            '[qwen-obs] ================================='
-        );
+            handleSubmit(
+                composer
+            );
+        },
+        true
+    );
 
-        console.log(
-            '[qwen-obs] QWEN OBSERVER READY'
-        );
+    // ========================================================
+    // INITIALISE
+    // ========================================================
 
-        console.log(
-            '[qwen-obs] LOGIN CONFIRMED'
-        );
+    setTimeout(
+        () => {
 
-        console.log(
-            '[qwen-obs] Employee:',
-            employeeEmail
-        );
+            detectEmail();
 
-        console.log(
-            '[qwen-obs] Session:',
-            sessionId
-        );
+            const composer =
+                findComposer();
 
-        console.log(
-            '[qwen-obs] Model:',
-            currentQwenModel
-        );
-
-        console.log(
-            '[qwen-obs] Account detection:',
-            'QWEN AUTH API'
-        );
-
-        console.log(
-            '[qwen-obs] DOM account detection:',
-            'DISABLED'
-        );
-
-        console.log(
-            '[qwen-obs] Token estimation:',
-            'ENABLED'
-        );
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-    };
-
-    // ============================================================
-    // WAIT FOR QWEN ACCOUNT
-    // ============================================================
-
-    const waitForQwenAccount = async () => {
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        console.log(
-            '[qwen-obs] STARTING QWEN ACCOUNT DETECTION'
-        );
-
-        console.log(
-            '[qwen-obs] METHOD: QWEN AUTH API ONLY'
-        );
-
-        console.log(
-            '[qwen-obs] ENDPOINT:',
-            QWEN_AUTH_ENDPOINT
-        );
-
-        console.log(
-            '[qwen-obs] DOM ACCOUNT DETECTION: DISABLED'
-        );
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        const detectedEmail =
-            await fetchQwenAccount();
-
-        if (!detectedEmail) {
-
-            console.error(
-                '[qwen-obs] ================================='
+            console.log(
+                '[qwen-obs] Composer:',
+                composer
+                    ? 'FOUND'
+                    : 'NOT FOUND'
             );
 
-            console.error(
-                '[qwen-obs] LOGIN NOT CONFIRMED'
+            console.log(
+                '[qwen-obs] Session:',
+                sessionId
             );
 
-            console.error(
-                '[qwen-obs] Collector will NOT start'
-            );
-
-            console.error(
-                '[qwen-obs] ================================='
-            );
-
-            return;
-        }
-
-        employeeEmail =
-            detectedEmail;
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        console.log(
-            '[qwen-obs] LOGIN CONFIRMED'
-        );
-
-        console.log(
-            '[qwen-obs] Employee:',
-            employeeEmail
-        );
-
-        console.log(
-            '[qwen-obs] Starting collector...'
-        );
-
-        console.log(
-            '[qwen-obs] ================================='
-        );
-
-        initializeCollector();
-    };
-
-    // ============================================================
-    // START
-    // ============================================================
-
-    waitForQwenAccount();
+        },
+        1500
+    );
 
 })();
