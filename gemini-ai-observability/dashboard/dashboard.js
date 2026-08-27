@@ -7,13 +7,16 @@
 // CHART INSTANCES
 // ============================================================
 
-let employeeInteractionChart;
-let providerInteractionChart;
-let providerSessionChart;
-let employeeAiChart;
-let latencyChart;
-let providerTokenChart;
-let tokenTypeChart;
+let employeeInteractionChart = null;
+let providerInteractionChart = null;
+let providerSessionChart = null;
+let employeeAiChart = null;
+let latencyChart = null;
+let providerTokenChart = null;
+let tokenTypeChart = null;
+
+let providerCostChart = null;
+let costTypeChart = null;
 
 // ============================================================
 // GLOBAL DATA
@@ -437,32 +440,54 @@ function getBaseRowCost(row) {
 // ============================================================
 
 function calculateTotalUsdCost(products) {
-
     if (!Array.isArray(products)) {
         return 0;
     }
 
     return products.reduce(
-
-        (
-            total,
-            row
-        ) => {
-
-            return (
-
-                total +
-                getRowCost(row)
-
-            );
-
+        (total, row) => {
+            return total + getBaseRowCost(row);
         },
-
         0
-
     );
-
 }
+
+
+// ============================================================
+// NORMALIZE AI PRODUCT
+// ============================================================
+
+function normalizeAIProduct(row) {
+
+    const product = String(
+        row.product ||
+        row.ai_product ||
+        ''
+    ).toLowerCase().trim();
+
+    const provider = String(
+        row.provider ||
+        ''
+    ).toLowerCase().trim();
+
+    // Product is already valid
+    if (AI_PRODUCTS[product]) {
+        return product;
+    }
+
+    // Provider -> product
+    const providerToProduct = {
+        openai: 'chatgpt',
+        google: 'gemini',
+        anthropic: 'claude',
+        microsoft: 'copilot',
+        perplexity: 'perplexity',
+        alibaba: 'qwen'
+    };
+
+    return providerToProduct[provider] || null;
+}
+
 
 // ============================================================
 // COST BREAKDOWN BY AI
@@ -472,56 +497,72 @@ function calculateCostBreakdown(products) {
 
     const breakdown = {};
 
-    // Initialise all configured AI products.
-    Object.keys(AI_PRODUCTS).forEach(
-        product => {
+    // --------------------------------------------------------
+    // INITIALISE ALL CONFIGURED AI PRODUCTS
+    // --------------------------------------------------------
 
-            breakdown[product] = {
+    Object.keys(AI_PRODUCTS).forEach(product => {
 
-                product: product,
+        breakdown[product] = {
 
-                name:
-                    AI_PRODUCTS[product].name,
+            product: product,
 
-                color:
-                    AI_PRODUCTS[product].color,
+            name:
+                AI_PRODUCTS[product].name,
 
-                usd: 0,
+            color:
+                AI_PRODUCTS[product].color,
 
-                baseUsd: 0,
+            usd: 0,
 
-                myr: 0,
+            baseUsd: 0,
 
-                interactions: 0,
+            myr: 0,
 
-                promptTokens: 0,
+            interactions: 0,
 
-                responseTokens: 0,
+            promptTokens: 0,
 
-                totalTokens: 0
+            responseTokens: 0,
 
-            };
+            totalTokens: 0
+        };
+    });
 
-        }
-    );
 
     if (!Array.isArray(products)) {
         return breakdown;
     }
 
+
+    // --------------------------------------------------------
+    // PROCESS API ROWS
+    // --------------------------------------------------------
+
     products.forEach(row => {
 
-        const product = String(
+        const product =
+            normalizeAIProduct(row);
 
-            row.product ||
-            row.ai_product ||
-            ''
 
-        ).toLowerCase();
+        // Ignore unknown products
+        if (
+            !product ||
+            !breakdown[product]
+        ) {
 
-        if (!breakdown[product]) {
+            console.warn(
+                '[ai-obs] COST BREAKDOWN: unknown product',
+                row
+            );
+
             return;
         }
+
+
+        // ----------------------------------------------------
+        // TOKEN COUNTS
+        // ----------------------------------------------------
 
         const promptTokens =
             getPromptTokens(row);
@@ -532,45 +573,69 @@ function calculateCostBreakdown(products) {
         const totalTokens =
             getTokenValue(row);
 
+
+        // ----------------------------------------------------
+        // COST
+        // ----------------------------------------------------
+
         const cost =
-            getRowCost(row);
+            calculateCost(
+                product,
+                promptTokens,
+                responseTokens
+            );
 
         const baseCost =
-            getBaseRowCost(row);
+            calculateBaseCost(
+                product,
+                promptTokens,
+                responseTokens
+            );
 
-        breakdown[product].usd += cost;
 
-        breakdown[product].baseUsd += baseCost;
+        // ----------------------------------------------------
+        // STORE VALUES
+        // ----------------------------------------------------
+
+        breakdown[product].usd +=
+            Number(cost) || 0;
+
+        breakdown[product].baseUsd +=
+            Number(baseCost) || 0;
 
         breakdown[product].promptTokens +=
-            promptTokens;
+            Number(promptTokens) || 0;
 
         breakdown[product].responseTokens +=
-            responseTokens;
+            Number(responseTokens) || 0;
 
         breakdown[product].totalTokens +=
-            totalTokens;
+            Number(totalTokens) || 0;
 
         breakdown[product].interactions +=
             Number(row.interactions) || 0;
-
     });
 
-    // Calculate MYR values.
+
+    // --------------------------------------------------------
+    // USD -> MYR
+    // --------------------------------------------------------
+
     Object.values(breakdown).forEach(item => {
 
-        if (currentBnmRate !== null) {
+        if (
+            currentBnmRate !== null &&
+            Number.isFinite(currentBnmRate)
+        ) {
 
             item.myr =
                 item.usd *
                 currentBnmRate;
-
         }
-
     });
 
-    return breakdown;
 
+    return breakdown;
 }
 
 // ============================================================
@@ -829,27 +894,316 @@ function updateCostDisplay(products) {
 }
 
 // ============================================================
+// COST BY AI PLATFORM
+// ============================================================
+
+function updateProviderCostChart(products) {
+
+    const canvas = document.getElementById('providerCostChart');
+
+    if (!canvas) {
+        console.error(
+            '[dashboard] providerCostChart canvas not found'
+        );
+        return;
+    }
+
+    if (!Array.isArray(products)) {
+        console.warn(
+            '[dashboard] Invalid products data for cost chart'
+        );
+        return;
+    }
+
+    // --------------------------------------------------------
+    // CALCULATE COST BY AI PRODUCT
+    // --------------------------------------------------------
+
+    const breakdown = calculateCostBreakdown(products);
+
+    const items = Object.values(breakdown).filter(
+        item =>
+            item.usd > 0 ||
+            item.promptTokens > 0 ||
+            item.responseTokens > 0
+    );
+
+    const labels = items.map(
+        item => item.name
+    );
+
+    const costs = items.map(
+        item => Number(item.usd) || 0
+    );
+
+    const colors = items.map(
+        item => item.color
+    );
+
+    // --------------------------------------------------------
+    // CREATE CHART IF IT DOES NOT EXIST
+    // --------------------------------------------------------
+
+    if (!providerCostChart) {
+
+        providerCostChart = new Chart(
+            canvas,
+            {
+                type: 'bar',
+
+                data: {
+                    labels: labels,
+
+                    datasets: [
+                        {
+                            label: 'Estimated Cost (USD)',
+                            data: costs,
+
+                            backgroundColor: colors,
+                            borderColor: colors,
+
+                            borderWidth: 1
+                        }
+                    ]
+                },
+
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+
+                                    return (
+                                        'Estimated Cost: ' +
+                                        formatUsd(context.raw)
+                                    );
+
+                                }
+                            }
+                        }
+                    },
+
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+
+                            ticks: {
+                                callback: function(value) {
+
+                                    return '$' +
+                                        Number(value).toFixed(4);
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        );
+
+        return;
+    }
+
+    // --------------------------------------------------------
+    // UPDATE EXISTING CHART
+    // --------------------------------------------------------
+
+    providerCostChart.data.labels = labels;
+
+    providerCostChart.data.datasets[0].data = costs;
+
+    providerCostChart.data.datasets[0].backgroundColor = colors;
+
+    providerCostChart.data.datasets[0].borderColor = colors;
+
+    providerCostChart.update('none');
+}
+
+
+
+// ============================================================
+// INPUT VS OUTPUT COST
+// ============================================================
+
+function updateCostTypeChart(products) {
+
+    const canvas = document.getElementById('costTypeChart');
+
+    if (!canvas) {
+        console.error(
+            '[dashboard] costTypeChart canvas not found'
+        );
+        return;
+    }
+
+    if (!Array.isArray(products)) {
+        console.warn(
+            '[dashboard] Invalid products data for cost type chart'
+        );
+        return;
+    }
+
+    // --------------------------------------------------------
+    // CALCULATE INPUT / OUTPUT COST
+    // --------------------------------------------------------
+
+    let inputCost = 0;
+    let outputCost = 0;
+
+    products.forEach(row => {
+
+        const product = normalizeAIProduct(row);
+
+        if (!product) {
+            return;
+        }
+
+        const pricing = AI_PRICING[product];
+
+        if (!pricing) {
+            return;
+        }
+
+        const promptTokens =
+            getPromptTokens(row);
+
+        const responseTokens =
+            getResponseTokens(row);
+
+        inputCost +=
+            promptTokens *
+            pricing.input;
+
+        outputCost +=
+            responseTokens *
+            pricing.output;
+
+    });
+
+    // --------------------------------------------------------
+    // DEMO MODE
+    // --------------------------------------------------------
+
+    if (demoMode) {
+
+        inputCost *= demoCostMultiplier;
+
+        outputCost *= demoCostMultiplier;
+
+    }
+
+    // --------------------------------------------------------
+    // CREATE CHART
+    // --------------------------------------------------------
+
+    if (!costTypeChart) {
+
+        costTypeChart = new Chart(
+            canvas,
+            {
+                type: 'doughnut',
+
+                data: {
+                    labels: [
+                        'Input Cost',
+                        'Output Cost'
+                    ],
+
+                    datasets: [
+                        {
+                            data: [
+                                inputCost,
+                                outputCost
+                            ],
+
+                            borderWidth: 1
+                        }
+                    ]
+                },
+
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+
+                    plugins: {
+
+                        legend: {
+                            display: true
+                        },
+
+                        tooltip: {
+                            callbacks: {
+
+                                label: function(context) {
+
+                                    return (
+                                        context.label +
+                                        ': ' +
+                                        formatUsd(context.raw)
+                                    );
+
+                                }
+
+                            }
+                        }
+
+                    }
+                }
+            }
+        );
+
+        return;
+    }
+
+    // --------------------------------------------------------
+    // UPDATE EXISTING CHART
+    // --------------------------------------------------------
+
+    costTypeChart.data.labels = [
+        'Input Cost',
+        'Output Cost'
+    ];
+
+    costTypeChart.data.datasets[0].data = [
+        inputCost,
+        outputCost
+    ];
+
+    costTypeChart.update('none');
+}
+
+// ============================================================
 // COST BREAKDOWN TABLE
 // ============================================================
 
 function updateCostBreakdown(products) {
 
-    const container =
+    const table =
         document.getElementById(
-            'costBreakdown'
+            'costBreakdownTable'
         );
 
-    if (!container) {
+    if (!table) {
         return;
     }
 
     const breakdown =
-        calculateCostBreakdown(
-            products
-        );
+        calculateCostBreakdown(products);
 
     const items =
-        Object.values(breakdown);
+        Object.values(breakdown).filter(
+            item =>
+                item.usd > 0 ||
+                item.interactions > 0 ||
+                item.totalTokens > 0
+        );
 
     const totalUsd =
         items.reduce(
@@ -860,109 +1214,21 @@ function updateCostBreakdown(products) {
 
     let html = '';
 
-    html += `
-
-        <div class="cost-breakdown-header">
-
-            <div>
-
-                <h3>
-                    AI Cost Breakdown
-                </h3>
-
-                <p>
-                    Estimated cost by AI product
-                </p>
-
-            </div>
-
-            ${
-                demoMode
-
-                    ? `
-
-                    <span
-                        id="costDemoBadge"
-                        class="demo-cost-badge"
-                    >
-                        DEMO ×${formatNumber(
-                            demoCostMultiplier
-                        )}
-                    </span>
-
-                    `
-
-                    : ''
-
-            }
-
-        </div>
-
-        <div class="cost-breakdown-table-wrapper">
-
-            <table class="cost-breakdown-table">
-
-                <thead>
-
-                    <tr>
-
-                        <th>AI</th>
-
-                        <th>Interactions</th>
-
-                        <th>Tokens</th>
-
-                        <th>USD</th>
-
-                        <th>MYR</th>
-
-                        <th>% of Total</th>
-
-                    </tr>
-
-                </thead>
-
-                <tbody>
-
-    `;
-
     items.forEach(item => {
 
-        if (
-
-            item.usd === 0 &&
-
-            item.interactions === 0 &&
-
-            item.totalTokens === 0
-
-        ) {
-
-            return;
-
-        }
-
         const percentage =
-
             totalUsd > 0
-
                 ? (
-
                     item.usd /
                     totalUsd
                 ) * 100
-
                 : 0;
 
         html += `
-
             <tr>
 
                 <td>
-
-                    <div
-                        class="cost-product-name"
-                    >
+                    <div class="cost-product-name">
 
                         <span
                             class="cost-product-dot"
@@ -977,7 +1243,6 @@ function updateCostBreakdown(products) {
                         </strong>
 
                     </div>
-
                 </td>
 
                 <td>
@@ -1001,9 +1266,10 @@ function updateCostBreakdown(products) {
                 <td>
                     ${
                         currentBnmRate !== null
-
-                            ? formatMyr(item.myr)
-
+                            ? formatMyr(
+                                item.usd *
+                                currentBnmRate
+                            )
                             : 'N/A'
                     }
                 </td>
@@ -1013,90 +1279,85 @@ function updateCostBreakdown(products) {
                 </td>
 
             </tr>
-
         `;
-
     });
 
-    html += `
+    if (items.length === 0) {
 
-                </tbody>
-
-                <tfoot>
-
-                    <tr>
-
-                        <td>
-                            <strong>Total</strong>
-                        </td>
-
-                        <td>
-                            -
-                        </td>
-
-                        <td>
-                            -
-                        </td>
-
-                        <td>
-                            <strong>
-                                ${formatUsd(totalUsd)}
-                            </strong>
-                        </td>
-
-                        <td>
-
-                            <strong>
-
-                                ${
-                                    currentBnmRate !== null
-
-                                        ? formatMyr(
-                                            totalUsd *
-                                            currentBnmRate
-                                        )
-
-                                        : 'N/A'
-                                }
-
-                            </strong>
-
-                        </td>
-
-                        <td>
-                            <strong>100%</strong>
-                        </td>
-
-                    </tr>
-
-                </tfoot>
-
-            </table>
-
-        </div>
-
-    `;
-
-    if (demoMode) {
-
-        html += `
-
-            <div class="demo-cost-note">
-
-                Demo Mode is enabled.
-                Costs shown above are multiplied by
-                ×${formatNumber(demoCostMultiplier)}
-                for demonstration purposes.
-                Actual token usage is unchanged.
-
-            </div>
-
+        html = `
+            <tr>
+                <td
+                    colspan="6"
+                    style="text-align:center;"
+                >
+                    No cost data available
+                </td>
+            </tr>
         `;
 
+    } else {
+
+        html += `
+            <tr>
+
+                <td>
+                    <strong>Total</strong>
+                </td>
+
+                <td>
+                    ${formatNumber(
+                        items.reduce(
+                            (sum, item) =>
+                                sum +
+                                item.interactions,
+                            0
+                        )
+                    )}
+                </td>
+
+                <td>
+                    ${formatNumber(
+                        items.reduce(
+                            (sum, item) =>
+                                sum +
+                                item.totalTokens,
+                            0
+                        )
+                    )}
+                </td>
+
+                <td>
+                    <strong>
+                        ${formatUsd(
+                            totalUsd
+                        )}
+                    </strong>
+                </td>
+
+                <td>
+                    <strong>
+                        ${
+                            currentBnmRate !== null
+                                ? formatMyr(
+                                    totalUsd *
+                                    currentBnmRate
+                                )
+                                : 'N/A'
+                        }
+                    </strong>
+                </td>
+
+                <td>
+                    <strong>
+                        100%
+                    </strong>
+                </td>
+
+            </tr>
+        `;
     }
 
-    container.innerHTML = html;
-
+    table.innerHTML = html;
 }
 
 // ============================================================
@@ -1261,6 +1522,14 @@ async function loadDashboard() {
         );
 
         updateCostBreakdown(
+            products
+        );
+
+        updateProviderCostChart(
+            products
+        );
+
+        updateCostTypeChart(
             products
         );
 
@@ -1500,54 +1769,101 @@ function updateProviderCharts(providers) {
         return;
     }
 
-    const labels =
-        providers.map(
-            provider =>
-                formatProductName(
-                    provider.product ||
-                    provider.provider
-                )
-        );
+    // --------------------------------------------------------
+    // PROVIDER NAMES
+    // --------------------------------------------------------
 
-    const products =
-        providers.map(
-            provider =>
-                provider.product ||
-                provider.provider
-        );
+    const labels = providers.map(provider => {
 
-    const interactions =
-        providers.map(
-            provider =>
-                Number(
-                    provider.interactions
-                ) || 0
-        );
+        const name = String(
+            provider.provider || ''
+        ).toLowerCase();
 
-    const sessions =
-        providers.map(
-            provider =>
-                Number(
-                    provider.sessions
-                ) || 0
-        );
+        const providerNames = {
+            google: 'Gemini',
+            openai: 'ChatGPT',
+            anthropic: 'Claude',
+            microsoft: 'Copilot',
+            perplexity: 'Perplexity',
+            alibaba: 'Qwen'
+        };
 
-    const latency =
-        providers.map(
-            provider =>
-                Number(
-                    provider.avg_latency_ms
-                ) || 0
-        );
-
-    const colors =
-        getProductColors(
-            products
-        );
+        return providerNames[name] || formatProductName(name);
+    });
 
     // --------------------------------------------------------
     // INTERACTIONS
     // --------------------------------------------------------
+
+    const interactions = providers.map(provider =>
+        Number(provider.interactions) || 0
+    );
+
+    // --------------------------------------------------------
+    // SESSIONS
+    // --------------------------------------------------------
+
+    const sessions = providers.map(provider =>
+        Number(provider.sessions) || 0
+    );
+
+    // --------------------------------------------------------
+    // LATENCY
+    // --------------------------------------------------------
+
+    const latency = providers.map(provider =>
+        Number(provider.avg_latency_ms) || 0
+    );
+
+    // --------------------------------------------------------
+    // TOKEN COUNT
+    // --------------------------------------------------------
+
+    const tokens = providers.map(provider => {
+
+        const total = Number(
+            provider.total_tokens
+        );
+
+        if (Number.isFinite(total) && total > 0) {
+            return total;
+        }
+
+        return (
+            Number(provider.prompt_tokens) || 0
+        ) + (
+            Number(provider.response_tokens) || 0
+        );
+    });
+
+    // --------------------------------------------------------
+    // PROVIDER COLOURS
+    // --------------------------------------------------------
+
+    const colors = providers.map(provider => {
+
+        const name = String(
+            provider.provider || ''
+        ).toLowerCase();
+
+        const providerColors = {
+            google: '#4285F4',
+            openai: '#10A37F',
+            anthropic: '#D97757',
+            microsoft: '#6366F1',
+            perplexity: '#20B8CD',
+            alibaba: '#FF6A00'
+        };
+
+        return (
+            providerColors[name] ||
+            DEFAULT_CHART_COLOR
+        );
+    });
+
+    // ========================================================
+    // INTERACTION CHART
+    // ========================================================
 
     const interactionCanvas =
         document.getElementById(
@@ -1570,9 +1886,7 @@ function updateProviderCharts(providers) {
             providerInteractionChart.data.datasets[0].borderColor =
                 colors;
 
-            providerInteractionChart.update(
-                'none'
-            );
+            providerInteractionChart.update('none');
 
         } else {
 
@@ -1580,50 +1894,35 @@ function updateProviderCharts(providers) {
                 new Chart(
                     interactionCanvas,
                     {
-
                         type: 'bar',
 
                         data: {
-
-                            labels,
+                            labels: labels,
 
                             datasets: [
-
                                 {
+                                    label: 'Interactions',
 
-                                    label:
-                                        'Interactions',
+                                    data: interactions,
 
-                                    data:
-                                        interactions,
+                                    backgroundColor: colors,
 
-                                    backgroundColor:
-                                        colors,
-
-                                    borderColor:
-                                        colors,
+                                    borderColor: colors,
 
                                     borderWidth: 1
-
                                 }
-
                             ]
-
                         },
 
-                        options:
-                            chartOptions
-
+                        options: chartOptions
                     }
                 );
-
         }
-
     }
 
-    // --------------------------------------------------------
-    // SESSIONS
-    // --------------------------------------------------------
+    // ========================================================
+    // SESSION CHART
+    // ========================================================
 
     const sessionCanvas =
         document.getElementById(
@@ -1646,9 +1945,7 @@ function updateProviderCharts(providers) {
             providerSessionChart.data.datasets[0].borderColor =
                 colors;
 
-            providerSessionChart.update(
-                'none'
-            );
+            providerSessionChart.update('none');
 
         } else {
 
@@ -1656,50 +1953,35 @@ function updateProviderCharts(providers) {
                 new Chart(
                     sessionCanvas,
                     {
-
                         type: 'bar',
 
                         data: {
-
-                            labels,
+                            labels: labels,
 
                             datasets: [
-
                                 {
+                                    label: 'Sessions',
 
-                                    label:
-                                        'Sessions',
+                                    data: sessions,
 
-                                    data:
-                                        sessions,
+                                    backgroundColor: colors,
 
-                                    backgroundColor:
-                                        colors,
-
-                                    borderColor:
-                                        colors,
+                                    borderColor: colors,
 
                                     borderWidth: 1
-
                                 }
-
                             ]
-
                         },
 
-                        options:
-                            chartOptions
-
+                        options: chartOptions
                     }
                 );
-
         }
-
     }
 
-    // --------------------------------------------------------
-    // LATENCY
-    // --------------------------------------------------------
+    // ========================================================
+    // LATENCY CHART
+    // ========================================================
 
     const latencyCanvas =
         document.getElementById(
@@ -1722,9 +2004,7 @@ function updateProviderCharts(providers) {
             latencyChart.data.datasets[0].borderColor =
                 colors;
 
-            latencyChart.update(
-                'none'
-            );
+            latencyChart.update('none');
 
         } else {
 
@@ -1732,47 +2012,109 @@ function updateProviderCharts(providers) {
                 new Chart(
                     latencyCanvas,
                     {
-
                         type: 'bar',
 
                         data: {
-
-                            labels,
+                            labels: labels,
 
                             datasets: [
-
                                 {
-
                                     label:
                                         'Average Latency (ms)',
 
-                                    data:
-                                        latency,
+                                    data: latency,
 
-                                    backgroundColor:
-                                        colors,
+                                    backgroundColor: colors,
 
-                                    borderColor:
-                                        colors,
+                                    borderColor: colors,
 
                                     borderWidth: 1
-
                                 }
-
                             ]
-
                         },
 
-                        options:
-                            chartOptions
-
+                        options: chartOptions
                     }
                 );
-
         }
-
     }
 
+    // ========================================================
+    // TOKEN CHART
+    // ========================================================
+
+    // const tokenCanvas =
+    //     document.getElementById(
+    //         'providerTokenChart'
+    //     );
+
+    // if (tokenCanvas) {
+
+    //     if (providerTokenChart) {
+
+    //         providerTokenChart.data.labels =
+    //             labels;
+
+    //         providerTokenChart.data.datasets[0].data =
+    //             tokens;
+
+    //         providerTokenChart.data.datasets[0].backgroundColor =
+    //             colors;
+
+    //         providerTokenChart.data.datasets[0].borderColor =
+    //             colors;
+
+    //         providerTokenChart.update('none');
+
+    //     } else {
+
+    //         providerTokenChart =
+    //             new Chart(
+    //                 tokenCanvas,
+    //                 {
+    //                     type: 'bar',
+
+    //                     data: {
+    //                         labels: labels,
+
+    //                         datasets: [
+    //                             {
+    //                                 label:
+    //                                     'Estimated Tokens',
+
+    //                                 data: tokens,
+
+    //                                 backgroundColor: colors,
+
+    //                                 borderColor: colors,
+
+    //                                 borderWidth: 1
+    //                             }
+    //                         ]
+    //                     },
+
+    //                     options: {
+    //                         ...chartOptions,
+
+    //                         plugins: {
+    //                             ...chartOptions.plugins,
+
+    //                             tooltip: {
+    //                                 callbacks: {
+
+    //                                     label: context =>
+    //                                         'Estimated Tokens: ' +
+    //                                         formatNumber(
+    //                                             context.raw
+    //                                         )
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //             );
+    //     }
+    // }
 }
 
 // ============================================================
