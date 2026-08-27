@@ -1620,88 +1620,77 @@ app.get(
 
         try {
 
-            const response =
-                await fetch(
-                    'https://api.bnm.gov.my/public/exchange-rate/USD',
-                    {
-                        method: 'GET',
-
-                        headers: {
-                            'Accept':
-                                'application/vnd.BNM.API.v1+json',
-
-                            'User-Agent':
-                                'AI-Observability-API'
-                        }
+            const response = await fetch(
+                'https://api.bnm.gov.my/public/exchange-rate',
+                {
+                    method: 'GET',
+                    headers: {
+                        'Accept':
+                            'application/vnd.BNM.API.v1+json',
+                        'User-Agent':
+                            'AI-Observability-API/1.0'
                     }
-                );
+                }
+            );
+
+            const responseText = await response.text();
+
+            console.log(
+                '[ai-obs] BNM HTTP STATUS:',
+                response.status
+            );
+
+            // console.log(
+            //     '[ai-obs] BNM RAW RESPONSE:',
+            //     responseText
+            // );
 
             if (!response.ok) {
-
                 throw new Error(
-                    `BNM API returned HTTP ${response.status}`
+                    `BNM API returned HTTP ${response.status}: ${responseText}`
                 );
             }
 
-            const data =
-                await response.json();
+            const data = JSON.parse(responseText);
 
-            console.log(
-                '[ai-obs] BNM response:',
-                JSON.stringify(
-                    data,
-                    null,
-                    2
+            // BNM returns data as an array
+            const usd = Array.isArray(data?.data)
+                ? data.data.find(
+                    currency =>
+                        currency?.currency_code === 'USD'
                 )
-            );
+                : null;
 
-            const usd =
-                data?.data;
-
-            const rate =
-                usd?.rate;
-
-            if (
-                !rate
-            ) {
+            if (!usd || !usd.rate) {
 
                 return res.status(502).json({
                     success: false,
                     error:
-                        'USD exchange rate unavailable'
+                        'USD exchange rate not found in BNM response'
                 });
             }
 
             const buyingRate =
-                Number(
-                    rate.buying_rate
-                );
+                Number(usd.rate.buying_rate);
 
             const sellingRate =
-                Number(
-                    rate.selling_rate
-                );
+                Number(usd.rate.selling_rate);
 
             const middleRate =
-                rate.middle_rate != null
-                    ? Number(
-                        rate.middle_rate
-                    )
+                usd.rate.middle_rate != null
+                    ? Number(usd.rate.middle_rate)
                     : (
-                        Number.isFinite(
-                            buyingRate
-                        ) &&
-                        Number.isFinite(
+                        Number.isFinite(buyingRate) &&
+                        Number.isFinite(sellingRate)
+                    )
+                        ? (
+                            buyingRate +
                             sellingRate
-                        )
-                            ? (
-                                buyingRate +
-                                sellingRate
-                            ) / 2
-                            : null
-                    );
+                        ) / 2
+                        : null;
 
-            res.json({
+            return res.json({
+
                 success: true,
 
                 currency: 'USD',
@@ -1712,36 +1701,28 @@ app.get(
                     usd.unit ?? 1,
 
                 buying_rate:
-                    Number.isFinite(
-                        buyingRate
-                    )
+                    Number.isFinite(buyingRate)
                         ? buyingRate
                         : null,
 
                 selling_rate:
-                    Number.isFinite(
-                        sellingRate
-                    )
+                    Number.isFinite(sellingRate)
                         ? sellingRate
                         : null,
 
                 middle_rate:
-                    Number.isFinite(
-                        middleRate
-                    )
+                    Number.isFinite(middleRate)
                         ? middleRate
                         : null,
 
                 date:
-                    rate.date ?? null,
+                    usd.rate.date ?? null,
 
                 session:
-                    data?.meta?.session ??
-                    null,
+                    data?.meta?.session ?? null,
 
                 last_updated:
-                    data?.meta?.last_updated ??
-                    null,
+                    data?.meta?.last_updated ?? null,
 
                 source:
                     'Bank Negara Malaysia'
@@ -1754,10 +1735,14 @@ app.get(
                 error
             );
 
-            res.status(502).json({
+            return res.status(502).json({
                 success: false,
                 error:
-                    'bnm_exchange_rate_unavailable'
+                    'bnm_exchange_rate_unavailable',
+
+                // Temporary diagnostic information
+                details:
+                    error?.message ?? String(error)
             });
         }
     }
