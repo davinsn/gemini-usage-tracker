@@ -116,20 +116,6 @@ const AI_PRICING = {
 
 };
 
-// ============================================================
-// DEMO MODE
-// ============================================================
-
-// Set to true to enable inflated/demo cost values.
-const DEMO_MODE = true;
-
-// Multiplier applied ONLY to displayed cost.
-// Example:
-// 1    = normal cost
-// 10   = 10x cost
-// 100  = 100x cost
-// 1000 = 1000x cost
-const DEMO_COST_MULTIPLIER = 100;
 
 
 // ============================================================
@@ -139,11 +125,11 @@ const DEMO_COST_MULTIPLIER = 100;
 function applyDemoCostMultiplier(cost) {
     const numericCost = Number(cost) || 0;
 
-    if (!DEMO_MODE) {
+    if (!demoMode) {
         return numericCost;
     }
 
-    return numericCost * DEMO_COST_MULTIPLIER;
+    return numericCost * demoCostMultiplier;
 }
 
 // ============================================================
@@ -837,8 +823,8 @@ function updateCostDisplay(products) {
         actualUsd: actualUsdCost,
         displayedUsd: displayedUsdCost,
         myr: myrCost,
-        demoMode: DEMO_MODE,
-        multiplier: DEMO_COST_MULTIPLIER
+        demoMode: demoMode,
+        multiplier: demoCostMultiplier
     };
 }
 
